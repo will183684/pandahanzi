@@ -5,7 +5,13 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git branch *)",
-      "Bash(git remote *)"
+      "Bash(git remote *)",
+      "Bash(gh auth *)",
+      "Bash(git push *)",
+      "Bash(find /usr /opt /Users -name \"node\" -type f 2>/dev/null | head -5)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
+      "Bash(kill 9872)",
+      "Bash(git check-ignore *)"
     ]
   }
 }
