@@ -23,7 +23,6 @@ export const DEFAULTS = {
   students: [],
 };
 
-export const TEACHER_CODE = "panda@teacher"; // 授课老师口令（可改）
 export const ADMIN_CODE = "panda@admin";     // 教务老师口令（可改）
 
 export const ACTIVITIES = [

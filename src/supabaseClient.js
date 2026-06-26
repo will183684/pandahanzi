@@ -48,6 +48,19 @@ export async function getClasses() {
 export async function saveClasses(list) {
   await kvSet(ROOT, "classes", list);
 }
+export async function deleteClassRecords(classId) {
+  const { error } = await supabase.from(TABLE).delete().eq("class_id", classId);
+  if (error) throw error;
+}
+
+/* ---- teacher registry ---- */
+export async function getTeachers() {
+  const v = await kvGet(ROOT, "teachers");
+  return Array.isArray(v) ? v : [];
+}
+export async function saveTeachers(list) {
+  await kvSet(ROOT, "teachers", list);
+}
 
 /* ---- shared lesson library (reusable weekly content) ---- */
 export async function getLibraryLessons() {

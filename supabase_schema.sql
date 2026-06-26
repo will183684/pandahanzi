@@ -26,10 +26,12 @@ alter table public.kv enable row level security;
 drop policy if exists "kv_read"   on public.kv;
 drop policy if exists "kv_insert" on public.kv;
 drop policy if exists "kv_update" on public.kv;
+drop policy if exists "kv_delete" on public.kv;
 
 create policy "kv_read"   on public.kv for select using (true);
 create policy "kv_insert" on public.kv for insert with check (true);
 create policy "kv_update" on public.kv for update using (true) with check (true);
+create policy "kv_delete" on public.kv for delete using (true);
 
 -- 实时同步：老师保存后，家长端自动刷新
 alter publication supabase_realtime add table public.kv;

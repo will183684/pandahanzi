@@ -3,6 +3,7 @@ import { C } from "../theme";
 import Dashboard from "./Dashboard";
 import ContentSettings from "./ContentSettings";
 import StudentManager from "./StudentManager";
+import TeacherManager from "./TeacherManager";
 
 /* Shared ghost-button style, also reused by the review banner in App. */
 export const ghostBtn = {
@@ -11,13 +12,14 @@ export const ghostBtn = {
 };
 
 /* ===================================================================
-   Teacher / Admin area (tabs: progress / content / students)
+   Teacher / Admin area (tabs: progress / content / students / teachers)
    =================================================================== */
 export default function TeacherArea({ role, className, roster, meta, students, getStudent, onSave, onSaveAudio, onStartNewWeek, onOpenArchive, onLogout, onSaveClasses, activeClassId, pushToast }) {
   const [view, setView] = useState("dashboard");
   const isAdmin = role === "admin";
   const tabs = [{ k: "dashboard", t: "📊 进度" }, { k: "content", t: "✏️ 内容" }];
   if (isAdmin) tabs.push({ k: "students", t: "👧 学生" });
+  if (isAdmin) tabs.push({ k: "teachers", t: "🧑‍🏫 老师" });
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
@@ -48,6 +50,9 @@ export default function TeacherArea({ role, className, roster, meta, students, g
       )}
       {view === "students" && isAdmin && (
         <StudentManager activeClassId={activeClassId} onSaveClasses={onSaveClasses} pushToast={pushToast} />
+      )}
+      {view === "teachers" && isAdmin && (
+        <TeacherManager pushToast={pushToast} />
       )}
     </div>
   );

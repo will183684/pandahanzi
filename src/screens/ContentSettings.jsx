@@ -249,7 +249,7 @@ export default function ContentSettings({ meta, isAdmin, onSave, onSaveAudio, on
 
         <div>
           <label style={labelStyle}>家长邀请码</label>
-          <input style={inputStyle} value={inviteCode} onChange={(ev) => setInviteCode(ev.target.value)} />
+          <input style={{ ...inputStyle, background: isAdmin ? "#fff" : "#f5f5f5", cursor: isAdmin ? "text" : "not-allowed" }} value={inviteCode} disabled={!isAdmin} onChange={(ev) => setInviteCode(ev.target.value)} />
         </div>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 4 }}>

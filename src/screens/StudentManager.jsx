@@ -77,8 +77,24 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {list.map((c) => (
           <div key={c.id} style={{ border: `2px solid ${c.id === activeClassId ? C.bamboo : C.border}`, borderRadius: 14, padding: 12 }}>
-            <div style={{ fontWeight: 800, marginBottom: 8 }}>
-              {c.name} <span style={{ fontSize: 12, color: "#9C9382", fontWeight: 600 }}>邀请码 {c.invite_code} · {c.students.length} 人</span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
+              <div style={{ fontWeight: 800 }}>
+                {c.name} <span style={{ fontSize: 12, color: "#9C9382", fontWeight: 600 }}>· {c.students.length} 人</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 13, color: "#8A8276", fontWeight: 700 }}>邀请码:</span>
+                <input
+                  style={{
+                    padding: "4px 8px", borderRadius: 8, border: `2px solid ${C.border}`,
+                    fontSize: 13, width: 100, fontWeight: 700, background: "#fff",
+                  }}
+                  value={c.invite_code || ""}
+                  onChange={(ev) => {
+                    const code = ev.target.value;
+                    commit(list.map((item) => item.id === c.id ? { ...item, invite_code: code } : item));
+                  }}
+                />
+              </div>
             </div>
             {c.students.length === 0 && <span style={{ color: "#9C9382", fontSize: 14 }}>暂无学生</span>}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
