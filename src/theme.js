@@ -25,6 +25,14 @@ export const DEFAULTS = {
 
 export const ADMIN_CODE = "panda@admin";     // 教务老师口令（可改）
 
+/* 字库分级：characters.level / lessons.level = 1 | 2 | 3 */
+export const LEVELS = [
+  { level: 1, name: "初级", sub: "启蒙级", color: "#E8453C" },
+  { level: 2, name: "中级", sub: "生活常用", color: "#F5C842" },
+  { level: 3, name: "高级", sub: "进阶提升", color: "#6BAF72" },
+];
+export const LEVEL_NAME = { 1: "初级", 2: "中级", 3: "高级" };
+
 export const ACTIVITIES = [
   { key: "flash", emoji: "🃏", name: "认一认", desc: "翻卡片认识汉字" },
   { key: "find", emoji: "🔍", name: "找一找", desc: "在泡泡里找到汉字" },

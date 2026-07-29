@@ -11,7 +11,16 @@
       "Bash(find /usr /opt /Users -name \"node\" -type f 2>/dev/null | head -5)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173)",
       "Bash(kill 9872)",
-      "Bash(git check-ignore *)"
+      "Bash(git check-ignore *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5173)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(/opt/homebrew/bin/node \"/private/tmp/claude-501/-Users-caizhao-Documents-panda/055cd8b1-beee-4e60-814f-90dd96a7581f/scratchpad/chars.js\")",
+      "Bash(/opt/homebrew/bin/npm init *)",
+      "Bash(/opt/homebrew/bin/npm i *)",
+      "Bash(/opt/homebrew/bin/node pinyin-test.js)",
+      "Bash(/opt/homebrew/bin/node pick8.js)",
+      "Bash(/opt/homebrew/bin/node gen-sql.js)",
+      "Bash(/opt/homebrew/bin/npm run *)"
     ]
   }
 }

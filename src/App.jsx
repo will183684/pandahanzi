@@ -1,21 +1,27 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { supabase, kvFetchAll, kvSet, kvSetMany, getClasses, saveClasses } from "./supabaseClient";
-import { C, DEFAULTS, ACTIVITIES } from "./theme";
-import { cnNumber } from "./utils";
+import {
+  supabase, getClasses, saveClasses,
+  getCurriculum, getClassLessons, getClassCharsBrief, getClassLessonChars,
+  startClassLesson, updateClassLesson, completeClassLesson, saveClassLessonChars,
+  getClassProgress, markProgress,
+} from "./supabaseClient";
+import { C, ACTIVITIES } from "./theme";
+import { toMeta, progressMap } from "./curriculum";
 import Panda from "./components/Panda";
-import { Toast, Shell, ConfirmDialog } from "./components/ui";
+import { Toast, Shell, BigButton } from "./components/ui";
 import ActivityHost from "./activities/ActivityHost";
 import Landing from "./screens/Landing";
 import StudentHome from "./screens/StudentHome";
 import ReviewHome from "./screens/ReviewHome";
 import ArchivePanel from "./screens/ArchivePanel";
+import LessonPicker from "./screens/LessonPicker";
 import TeacherArea, { ghostBtn } from "./screens/TeacherArea";
 
 /* ============================================================
-   熊猫画画班 · 汉字练习  (Panda Art — Chinese Character Practice)
-   Root component: owns the active class + week state, persists it to
-   Supabase, and routes between the landing / student / teacher views.
-   UI building blocks live under components/, activities/, and screens/.
+   熊猫画画班 · 汉字练习
+   根组件：持有当前班级 + 排课状态，落库到 Supabase，并在
+   登录页 / 学生页 / 老师页之间路由。
+   课程库（1200 字 / 240 课）是全局只读数据，进程内缓存一次。
    ============================================================ */
 export default function PandaHanziApp() {
   const [toast, setToast] = useState("");
@@ -26,101 +32,61 @@ export default function PandaHanziApp() {
     toastTimer.current = setTimeout(() => setToast(""), 2600);
   }, []);
 
-  // ---- store (mirrored in React state, persisted to Supabase) ----
-  const [index, setIndex] = useState([]);
-  const [currentId, setCurrentId] = useState("");
-  const [metas, setMetas] = useState({}); // id -> meta
-  const [progresses, setProgresses] = useState({}); // id -> progress
-  const [students, setStudents] = useState({}); // name -> record
-  const [loaded, setLoaded] = useState(false); // active class data loaded
-  const [activeClass, setActiveClass] = useState(null); // {id,name,invite_code}
+  // ---- session / class ----
+  const [session, setSession] = useState(null);       // {role:'parent'|'teacher'|'admin', name?}
+  const [activeClass, setActiveClass] = useState(null);
 
-  const blankProgress = () => ({ 0: false, 1: false, 2: false, 3: false, 4: false, completedAt: null });
+  // ---- data ----
+  const [curriculum, setCurriculum] = useState(null); // 全局课程库
+  const [classLessons, setClassLessons] = useState([]);
+  const [charsBrief, setCharsBrief] = useState([]);   // 本班所有课的字（无录音，列表预览用）
+  const [viewChars, setViewChars] = useState([]);     // 当前查看那节课的完整字表（含录音）
+  const [progressRows, setProgressRows] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [charsTick, setCharsTick] = useState(0);      // 触发重取 viewChars
 
-  const persistMeta = useCallback((id, meta) => {
-    if (!activeClass) return;
-    kvSet(activeClass.id, `week:${id}:meta`, meta).catch(() => pushToast("保存失败，请检查网络 ⚠️"));
-  }, [pushToast, activeClass]);
-  const persistProgress = useCallback((id, pr) => {
-    if (!activeClass) return;
-    kvSet(activeClass.id, `week:${id}:progress`, pr).catch(() => pushToast("进度保存失败，请稍后再试 ⚠️"));
-  }, [pushToast, activeClass]);
-  const persistStudent = useCallback((rec) => {
-    if (!activeClass) return;
-    kvSet(activeClass.id, `student:${rec.name}`, rec).catch(() => pushToast("学生记录保存失败 ⚠️"));
-  }, [pushToast, activeClass]);
-  const persistIndex = useCallback((arr, cur) => {
-    if (!activeClass) return;
-    kvSetMany(activeClass.id, [["weeks:index", arr], ["weeks:current", cur]]).catch(() => pushToast("保存失败 ⚠️"));
-  }, [pushToast, activeClass]);
+  // ---- ui ----
+  const [activeActivity, setActiveActivity] = useState(null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [reviewId, setReviewId] = useState(null);     // 回顾中的 class_lesson id
 
-  // rebuild React state from a full KV snapshot
-  const applySnapshot = useCallback((kv) => {
-    const idx = Array.isArray(kv["weeks:index"]) ? kv["weeks:index"] : [];
-    const cur = kv["weeks:current"] || idx[idx.length - 1] || "";
-    const ms = {}; const ps = {}; const stu = {};
-    idx.forEach((wid) => {
-      if (kv[`week:${wid}:meta`]) ms[wid] = kv[`week:${wid}:meta`];
-      ps[wid] = kv[`week:${wid}:progress`] || blankProgress();
-    });
-    Object.keys(kv).forEach((k) => {
-      if (k.indexOf("student:") === 0) { const r = kv[k]; if (r && r.name) stu[r.name] = r; }
-    });
-    setIndex(idx); setCurrentId(cur); setMetas(ms); setProgresses(ps); setStudents(stu);
-  }, []);
+  /* ---------------- 课程库：全局加载一次 ---------------- */
+  useEffect(() => {
+    let alive = true;
+    getCurriculum()
+      .then((c) => { if (alive) setCurriculum(c); })
+      .catch(() => pushToast("课程库加载失败，请检查网络 ⚠️"));
+    return () => { alive = false; };
+  }, [pushToast]);
 
-  // ---- load the active class from Supabase (+ bootstrap its first week) ----
+  /* ---------------- 本班数据 ---------------- */
+  const reload = useCallback(async () => {
+    if (!activeClass) return;
+    const lessons = await getClassLessons(activeClass.id);
+    const ids = lessons.map((l) => l.id);
+    const [brief, prog] = await Promise.all([getClassCharsBrief(ids), getClassProgress(ids)]);
+    setClassLessons(lessons);
+    setCharsBrief(brief);
+    setProgressRows(prog);
+  }, [activeClass]);
+
   useEffect(() => {
     if (!activeClass) return undefined;
     let alive = true;
-    (async () => {
-      try {
-        const kv = await kvFetchAll(activeClass.id);
+    setLoaded(false);
+    reload()
+      .then(() => { if (alive) setLoaded(true); })
+      .catch(() => {
         if (!alive) return;
-        const idx = kv["weeks:index"];
-        if (!Array.isArray(idx) || idx.length === 0) {
-          const id = "week_001";
-          const meta = {
-            id, label: "第一周", createdAt: new Date().toISOString(),
-            chars: DEFAULTS.chars, pinyins: DEFAULTS.pinyins, vocab: DEFAULTS.vocab,
-            sentence: DEFAULTS.sentence, emojiMap: DEFAULTS.emojiMap,
-            inviteCode: activeClass.invite_code || DEFAULTS.inviteCode,
-            students: DEFAULTS.students, distractors: DEFAULTS.distractors, audioMap: {},
-          };
-          const pr = blankProgress();
-          await kvSetMany(activeClass.id, [
-            [`week:${id}:meta`, meta],
-            [`week:${id}:progress`, pr],
-            ["weeks:index", [id]],
-            ["weeks:current", id],
-          ]);
-          if (!alive) return;
-          setIndex([id]); setCurrentId(id);
-          setMetas({ [id]: meta }); setProgresses({ [id]: pr }); setStudents({});
-          setLoaded(true);
-          return;
-        }
-        applySnapshot(kv);
+        pushToast("连接数据库失败，请检查网络 ⚠️");
         setLoaded(true);
-      } catch (err) {
-        if (!alive) return;
-        pushToast("连接数据库失败，请检查 Supabase 配置或网络 ⚠️");
-        const id = "week_001";
-        const meta = {
-          id, label: "第一周", createdAt: new Date().toISOString(),
-          chars: DEFAULTS.chars, pinyins: DEFAULTS.pinyins, vocab: DEFAULTS.vocab,
-          sentence: DEFAULTS.sentence, emojiMap: DEFAULTS.emojiMap,
-          inviteCode: (activeClass && activeClass.invite_code) || DEFAULTS.inviteCode,
-          students: DEFAULTS.students, distractors: DEFAULTS.distractors, audioMap: {},
-        };
-        setIndex([id]); setCurrentId(id); setMetas({ [id]: meta }); setProgresses({ [id]: blankProgress() });
-        setLoaded(true);
-      }
-    })();
+      });
     return () => { alive = false; };
-  }, [activeClass, pushToast, applySnapshot]);
+  }, [activeClass, reload, pushToast]);
 
-  // ---- realtime: sync this class when anyone (e.g. the teacher) saves ----
+  /* ---------------- realtime ---------------- */
   useEffect(() => {
     if (!activeClass) return undefined;
     let alive = true;
@@ -128,139 +94,146 @@ export default function PandaHanziApp() {
     const refetch = () => {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        kvFetchAll(activeClass.id).then((kv) => { if (alive) applySnapshot(kv); }).catch(() => {});
+        if (!alive) return;
+        reload().catch(() => {});
+        setCharsTick((t) => t + 1);
       }, 250);
     };
+    // class_lesson_chars / lesson_progress 没有 class_id 列，没法按班过滤，
+    // 收到任何变更都重取一次；数据量小，代价可以忽略。
     const channel = supabase
-      .channel("kv-sync-" + activeClass.id)
-      .on("postgres_changes", { event: "*", schema: "public", table: "kv", filter: `class_id=eq.${activeClass.id}` }, refetch)
+      .channel("v2-sync-" + activeClass.id)
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "class_lessons", filter: `class_id=eq.${activeClass.id}` }, refetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "class_lesson_chars" }, refetch)
+      .on("postgres_changes", { event: "*", schema: "public", table: "lesson_progress" }, refetch)
       .subscribe();
     return () => { alive = false; if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
-  }, [activeClass, applySnapshot]);
+  }, [activeClass, reload]);
 
-  // ---- session ----
-  const [session, setSession] = useState(null); // {role:'parent'|'teacher'|'admin', name?}
-  const [screen, setScreen] = useState("home"); // 'home' | activity index handled separately
-  const [activeActivity, setActiveActivity] = useState(null);
-  const [archiveOpen, setArchiveOpen] = useState(false);
-  const [reviewId, setReviewId] = useState(null); // weekId being reviewed (read-only)
-
-  const currentMeta = metas[currentId];
+  /* ---------------- 派生 ---------------- */
+  const activeLesson = useMemo(
+    () => classLessons.find((l) => l.status === "active") || null,
+    [classLessons]
+  );
   const reviewing = reviewId != null;
-  const viewMeta = reviewing ? metas[reviewId] : currentMeta;
-  const viewProgress = reviewing ? blankProgress() : (progresses[currentId] || blankProgress());
+  const viewLesson = useMemo(
+    () => (reviewing ? classLessons.find((l) => l.id === reviewId) || null : activeLesson),
+    [reviewing, reviewId, classLessons, activeLesson]
+  );
+  const viewLessonId = viewLesson ? viewLesson.id : null;
 
-  const getProgressFor = useCallback((wid) => progresses[wid] || blankProgress(), [progresses]);
-  const getStudent = useCallback((nm) => students[nm], [students]);
+  /* 当前查看那节课的完整字表（含录音） */
+  useEffect(() => {
+    if (!viewLessonId) { setViewChars([]); return undefined; }
+    let alive = true;
+    getClassLessonChars(viewLessonId)
+      .then((cs) => { if (alive) setViewChars(cs); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [viewLessonId, charsTick]);
 
-  // ---- save content (teacher/admin) ----
-  const saveContent = useCallback((nextMeta) => {
-    setMetas((prev) => ({ ...prev, [nextMeta.id]: nextMeta }));
-    persistMeta(nextMeta.id, nextMeta);
-    // keep the class invite code (used by parents to join) in sync with the registry
-    if (activeClass && nextMeta.inviteCode && nextMeta.inviteCode !== activeClass.invite_code) {
-      const code = nextMeta.inviteCode;
-      getClasses().then((list) => {
-        const nlist = list.map((c) => (c.id === activeClass.id ? { ...c, invite_code: code } : c));
-        return saveClasses(nlist);
-      }).then(() => setActiveClass((a) => (a ? { ...a, invite_code: code } : a))).catch(() => {});
+  const viewMeta = useMemo(
+    () => toMeta(viewLesson, viewChars, curriculum),
+    [viewLesson, viewChars, curriculum]
+  );
+
+  const who = session && session.role === "parent" ? session.name : null;
+  const viewProgress = useMemo(
+    () => progressMap(progressRows, viewLessonId, ACTIVITIES, who),
+    [progressRows, viewLessonId, who]
+  );
+  const getProgressFor = useCallback(
+    (id) => progressMap(progressRows, id, ACTIVITIES, who),
+    [progressRows, who]
+  );
+
+  const charsByLesson = useMemo(() => {
+    const m = new Map();
+    charsBrief.forEach((c) => {
+      if (!m.has(c.class_lesson_id)) m.set(c.class_lesson_id, []);
+      m.get(c.class_lesson_id).push(c);
+    });
+    m.forEach((list) => list.sort((a, b) => a.pos - b.pos));
+    return m;
+  }, [charsBrief]);
+  const charsOf = useCallback(
+    (id) => (charsByLesson.get(id) || []).map((c) => c.hanzi).join(""),
+    [charsByLesson]
+  );
+
+  const lessonsNewestFirst = useMemo(
+    () => classLessons.slice().sort((a, b) => b.seq - a.seq),
+    [classLessons]
+  );
+
+  /* ---------------- 老师操作 ---------------- */
+  const run = useCallback(async (fn, okMsg, errMsg) => {
+    setBusy(true);
+    try {
+      await fn();
+      await reload();
+      setCharsTick((t) => t + 1);
+      if (okMsg) pushToast(okMsg);
+    } catch (e) {
+      pushToast(errMsg || "操作失败 ⚠️");
     }
-    pushToast("已保存 ✅");
-  }, [persistMeta, pushToast, activeClass]);
+    setBusy(false);
+  }, [reload, pushToast]);
 
-  // ---- save a single character's teacher recording (or clear it) ----
-  const saveAudio = useCallback((char, dataUrl) => {
-    setMetas((prev) => {
-      const m = prev[currentId];
-      if (!m) return prev;
-      const am = { ...(m.audioMap || {}) };
-      if (dataUrl) am[char] = dataUrl; else delete am[char];
-      const nm = { ...m, audioMap: am };
-      persistMeta(currentId, nm);
-      return { ...prev, [currentId]: nm };
-    });
-  }, [currentId, persistMeta]);
+  const pickLesson = useCallback((lesson) => {
+    setPickerOpen(false);
+    run(
+      () => startClassLesson(activeClass.id, lesson, classLessons),
+      `已选用：${lesson.title || "第" + lesson.lesson_no + "课"} 📚`,
+      "选课失败 ⚠️"
+    );
+  }, [activeClass, classLessons, run]);
 
-  // ---- start new week (admin) ----
-  const doStartNewWeek = useCallback(() => {
-    const num = index.length + 1;
-    const newId = "week_" + String(num).padStart(3, "0");
-    const newMeta = {
-      id: newId, label: "第" + cnNumber(num) + "周", createdAt: new Date().toISOString(),
-      chars: [], pinyins: [], vocab: [], sentence: "", emojiMap: {}, audioMap: {},
-      inviteCode: currentMeta ? currentMeta.inviteCode : DEFAULTS.inviteCode,
-      students: currentMeta ? currentMeta.students : [], distractors: DEFAULTS.distractors,
-    };
-    const newIdx = [...index, newId];
-    const newPr = blankProgress();
-    setIndex(newIdx);
-    setCurrentId(newId);
-    setMetas((prev) => ({ ...prev, [newId]: newMeta }));
-    setProgresses((prev) => ({ ...prev, [newId]: newPr }));
-    // reset students' completed for the new week
-    setStudents((prev) => {
-      const ns = {};
-      Object.keys(prev).forEach((nm) => {
-        const rec = { ...prev[nm], completed: [] };
-        ns[nm] = rec;
-        persistStudent(rec);
-      });
-      return ns;
-    });
-    persistMeta(newId, newMeta);
-    persistProgress(newId, newPr);
-    persistIndex(newIdx, newId);
-    pushToast("新的一周开始啦！🗓️");
-  }, [index, currentMeta, persistMeta, persistProgress, persistIndex, persistStudent, pushToast]);
+  const saveLesson = useCallback((patch) => {
+    if (!activeLesson) return;
+    run(() => updateClassLesson(activeLesson.id, patch), "已保存 ✅", "保存失败 ⚠️");
+  }, [activeLesson, run]);
 
-  const [confirmNewWeek, setConfirmNewWeek] = useState(false);
-  const handleStartNewWeek = useCallback(() => {
-    const pr = progresses[currentId] || blankProgress();
-    const complete = ACTIVITIES.every((_, i) => pr[i]);
-    if (!complete) { setConfirmNewWeek(true); return; }
-    doStartNewWeek();
-  }, [progresses, currentId, doStartNewWeek]);
+  const saveChars = useCallback((rows) => {
+    if (!activeLesson) return;
+    run(() => saveClassLessonChars(activeLesson.id, rows), null, "字表保存失败 ⚠️");
+  }, [activeLesson, run]);
 
-  // ---- mark activity complete (student) ----
+  const finishLesson = useCallback(() => {
+    if (!activeLesson) return;
+    run(() => completeClassLesson(activeLesson.id), "本课已完成 ✅", "操作失败 ⚠️");
+  }, [activeLesson, run]);
+
+  /* ---------------- 学生完成一个活动 ---------------- */
   const markComplete = useCallback((activityIndex) => {
-    if (reviewing) return;
-    // week progress
-    setProgresses((prev) => {
-      const cur = prev[currentId] || blankProgress();
-      const np = { ...cur, [activityIndex]: true };
-      const allDone = ACTIVITIES.every((_, i) => np[i]);
-      np.completedAt = allDone ? new Date().toISOString() : cur.completedAt;
-      persistProgress(currentId, np);
-      return { ...prev, [currentId]: np };
-    });
-    // student record
-    if (session && session.role === "parent" && session.name) {
-      setStudents((prev) => {
-        const rec = prev[session.name] || { name: session.name, completed: [] };
-        const comp = rec.completed.includes(activityIndex) ? rec.completed : [...rec.completed, activityIndex];
-        const nrec = { ...rec, name: session.name, completed: comp };
-        persistStudent(nrec);
-        return { ...prev, [session.name]: nrec };
-      });
-    }
-  }, [reviewing, currentId, session, persistProgress, persistStudent]);
+    if (reviewing || !viewLessonId) return;
+    if (!session || session.role !== "parent" || !session.name) return;
+    const key = ACTIVITIES[activityIndex].key;
+    // 先本地生效，realtime 回来时会被真实数据覆盖
+    setProgressRows((prev) =>
+      prev.some((r) => r.class_lesson_id === viewLessonId && r.student_name === session.name && r.activity_key === key)
+        ? prev
+        : [...prev, { class_lesson_id: viewLessonId, student_name: session.name, activity_key: key, completed_at: new Date().toISOString() }]
+    );
+    markProgress(viewLessonId, session.name, key).catch(() => pushToast("进度保存失败 ⚠️"));
+  }, [reviewing, viewLessonId, session, pushToast]);
 
-  // ---- enter / leave a class ----
+  /* ---------------- 进出班级 ---------------- */
   const enterClass = useCallback((cls, sess) => {
     setLoaded(false);
-    setIndex([]); setCurrentId(""); setMetas({}); setProgresses({}); setStudents({});
+    setClassLessons([]); setCharsBrief([]); setViewChars([]); setProgressRows([]);
     setActiveClass(cls);
     setSession(sess);
-    setScreen("home"); setReviewId(null); setActiveActivity(null); setArchiveOpen(false);
+    setReviewId(null); setActiveActivity(null); setArchiveOpen(false); setPickerOpen(false);
   }, []);
 
   const logout = useCallback(() => {
     setSession(null); setActiveClass(null); setLoaded(false);
-    setScreen("home"); setActiveActivity(null); setReviewId(null); setArchiveOpen(false);
-    setIndex([]); setCurrentId(""); setMetas({}); setProgresses({}); setStudents({});
+    setClassLessons([]); setCharsBrief([]); setViewChars([]); setProgressRows([]);
+    setReviewId(null); setActiveActivity(null); setArchiveOpen(false); setPickerOpen(false);
   }, []);
 
-  // admin: save the class registry (rosters etc.) and refresh the active class
   const saveAllClasses = useCallback((nlist) => {
     saveClasses(nlist).catch(() => pushToast("班级保存失败 ⚠️"));
     setActiveClass((a) => {
@@ -270,29 +243,13 @@ export default function PandaHanziApp() {
     });
   }, [pushToast]);
 
-  // seed the student record (so the teacher dashboard lists them) after load
-  useEffect(() => {
-    if (!loaded || !session || session.role !== "parent" || !session.name) return;
-    if (students[session.name]) return;
-    const rec = { name: session.name, completed: [] };
-    setStudents((prev) => ({ ...prev, [session.name]: rec }));
-    persistStudent(rec);
-  }, [loaded, session, students, persistStudent]);
-
-  // ---- archive / review ----
-  const openReview = useCallback((wid) => {
-    setReviewId(wid); setArchiveOpen(false); setActiveActivity(null);
+  const openReview = useCallback((id) => {
+    setReviewId(id); setArchiveOpen(false); setActiveActivity(null);
   }, []);
   const exitReview = useCallback(() => { setReviewId(null); setActiveActivity(null); }, []);
 
-  const weeksList = useMemo(
-    () => index.map((wid) => metas[wid]).filter(Boolean).slice().reverse(),
-    [index, metas]
-  );
-
   /* --------------------------- RENDER --------------------------- */
 
-  // no class chosen yet -> landing (login / pick class)
   if (!activeClass) {
     return (
       <Shell>
@@ -302,7 +259,6 @@ export default function PandaHanziApp() {
     );
   }
 
-  // class chosen but its data still loading
   if (!loaded) {
     return (
       <Shell>
@@ -315,18 +271,27 @@ export default function PandaHanziApp() {
     );
   }
 
-  // review banner
   const reviewBanner = reviewing ? (
     <div style={{
       display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
       background: "#FBEFCB", borderBottom: `2px solid ${C.gold}`, padding: "10px 16px", flexWrap: "wrap",
     }}>
-      <span style={{ fontWeight: 800, color: "#8a6d12" }}>🔒 回顾模式 · {viewMeta ? viewMeta.label : ""}</span>
-      <button onClick={exitReview} style={ghostBtn}>返回本周 ↩</button>
+      <span style={{ fontWeight: 800, color: "#8a6d12" }}>
+        🔒 回顾模式 · {viewLesson ? viewLesson.title : ""}
+      </span>
+      <button onClick={exitReview} style={ghostBtn}>返回本课 ↩</button>
     </div>
   ) : null;
 
-  // TEACHER / ADMIN
+  const archive = archiveOpen ? (
+    <ArchivePanel
+      lessons={lessonsNewestFirst} activeId={activeLesson ? activeLesson.id : null}
+      charsOf={charsOf} getProgress={getProgressFor}
+      onClose={() => setArchiveOpen(false)} onReview={openReview}
+    />
+  ) : null;
+
+  /* ---------------- 老师 / 教务 ---------------- */
   if (session.role === "teacher" || session.role === "admin") {
     return (
       <Shell banner={reviewBanner}>
@@ -339,37 +304,63 @@ export default function PandaHanziApp() {
           )
         ) : (
           <TeacherArea
-            role={session.role} className={activeClass ? activeClass.name : ""} roster={activeClass ? activeClass.students : []} meta={currentMeta} students={students} getStudent={getStudent}
-            onSaveClasses={saveAllClasses} activeClassId={activeClass ? activeClass.id : ""}
-            onSave={saveContent} onSaveAudio={saveAudio} onStartNewWeek={handleStartNewWeek}
-            onOpenArchive={() => setArchiveOpen(true)} onLogout={logout} pushToast={pushToast}
+            role={session.role}
+            className={activeClass.name}
+            roster={activeClass.students || []}
+            activeClassId={activeClass.id}
+            lesson={activeLesson}
+            chars={viewChars}
+            progressRows={progressRows}
+            busy={busy}
+            onOpenPicker={() => setPickerOpen(true)}
+            onSaveLesson={saveLesson}
+            onSaveChars={saveChars}
+            onCompleteLesson={finishLesson}
+            onOpenArchive={() => setArchiveOpen(true)}
+            onLogout={logout}
+            onSaveClasses={saveAllClasses}
+            pushToast={pushToast}
           />
         )}
-        {archiveOpen && (
-          <ArchivePanel weeks={weeksList} currentId={currentId} getProgress={getProgressFor}
-            onClose={() => setArchiveOpen(false)} onReview={openReview} />
-        )}
-        {confirmNewWeek && (
-          <ConfirmDialog
-            text="本周还没全部完成，确定要开始新的一周吗？当前这一周会存进历史记录。"
-            onCancel={() => setConfirmNewWeek(false)}
-            onConfirm={() => { setConfirmNewWeek(false); doStartNewWeek(); }}
+        {pickerOpen && curriculum && (
+          <LessonPicker
+            curriculum={curriculum} classLessons={classLessons} busy={busy}
+            onPick={pickLesson} onClose={() => setPickerOpen(false)}
           />
         )}
+        {archive}
         <Toast msg={toast} />
       </Shell>
     );
   }
 
-  // PARENT / STUDENT
+  /* ---------------- 家长 / 学生 ---------------- */
+  if (!reviewing && (!viewMeta || viewMeta.chars.length === 0)) {
+    return (
+      <Shell banner={reviewBanner}>
+        <div style={{ textAlign: "center", padding: "40px 16px" }}>
+          <Panda sz={130} ex="curious" />
+          <h2 style={{ fontSize: 22, marginBottom: 6 }}>老师还没安排本周内容</h2>
+          <p style={{ color: "#8A8276" }}>过一会儿再来看看吧 🐼</p>
+          <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+            <BigButton color={C.bamboo} light onClick={() => setArchiveOpen(true)}>📚 历史记录</BigButton>
+            <BigButton color={C.bamboo} light onClick={logout}>退出登录</BigButton>
+          </div>
+        </div>
+        {archive}
+        <Toast msg={toast} />
+      </Shell>
+    );
+  }
+
   return (
     <Shell banner={reviewBanner}>
       {activeActivity == null ? (
-        reviewing && viewMeta ? (
+        reviewing ? (
           <ReviewHome meta={viewMeta} onOpenActivity={setActiveActivity} onExit={exitReview} />
         ) : (
           <StudentHome
-            studentName={session.name} meta={currentMeta} progress={viewProgress} readOnly={false}
+            studentName={session.name} meta={viewMeta} progress={viewProgress} readOnly={false}
             onOpenActivity={setActiveActivity} onOpenArchive={() => setArchiveOpen(true)} onLogout={logout}
           />
         )
@@ -379,10 +370,7 @@ export default function PandaHanziApp() {
           onComplete={markComplete} onBack={() => setActiveActivity(null)}
         />
       )}
-      {archiveOpen && (
-        <ArchivePanel weeks={weeksList} currentId={currentId} getProgress={getProgressFor}
-          onClose={() => setArchiveOpen(false)} onReview={openReview} />
-      )}
+      {archive}
       <Toast msg={toast} />
     </Shell>
   );

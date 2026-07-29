@@ -14,19 +14,28 @@ export const ghostBtn = {
 /* ===================================================================
    Teacher / Admin area (tabs: progress / content / students / teachers)
    =================================================================== */
-export default function TeacherArea({ role, className, roster, meta, students, getStudent, onSave, onSaveAudio, onStartNewWeek, onOpenArchive, onLogout, onSaveClasses, activeClassId, pushToast }) {
+export default function TeacherArea({
+  role, className, roster, activeClassId,
+  lesson, chars, progressRows,
+  onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson,
+  onOpenArchive, onLogout, onSaveClasses, pushToast, busy,
+}) {
   const [view, setView] = useState("dashboard");
   const isAdmin = role === "admin";
   const tabs = [{ k: "dashboard", t: "📊 进度" }, { k: "content", t: "✏️ 内容" }];
   if (isAdmin) tabs.push({ k: "students", t: "👧 学生" });
   if (isAdmin) tabs.push({ k: "teachers", t: "🧑‍🏫 老师" });
+
+  const charsPreview = (chars || []).map((c) => c.hanzi).join("");
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <h1 style={{ fontSize: 24, margin: 0 }}>
           🏫 {className || "班级"}
           <span style={{ fontSize: 13, color: "#8A8276", marginLeft: 8, fontWeight: 600 }}>
-            {isAdmin ? "教务老师" : "授课老师"} · {meta.label} · {meta.chars.join("")}
+            {isAdmin ? "教务老师" : "授课老师"}
+            {lesson ? ` · ${lesson.title} · ${charsPreview}` : " · 未安排课程"}
           </span>
         </h1>
         <div style={{ display: "flex", gap: 8 }}>
@@ -44,9 +53,15 @@ export default function TeacherArea({ role, className, roster, meta, students, g
         ))}
       </div>
 
-      {view === "dashboard" && <Dashboard roster={roster} students={students} getStudent={getStudent} />}
+      {view === "dashboard" && (
+        <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} />
+      )}
       {view === "content" && (
-        <ContentSettings meta={meta} isAdmin={isAdmin} onSave={onSave} onSaveAudio={onSaveAudio} onStartNewWeek={onStartNewWeek} pushToast={pushToast} />
+        <ContentSettings
+          lesson={lesson} chars={chars} busy={busy} pushToast={pushToast}
+          onOpenPicker={onOpenPicker} onSaveLesson={onSaveLesson}
+          onSaveChars={onSaveChars} onCompleteLesson={onCompleteLesson}
+        />
       )}
       {view === "students" && isAdmin && (
         <StudentManager activeClassId={activeClassId} onSaveClasses={onSaveClasses} pushToast={pushToast} />
