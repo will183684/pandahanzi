@@ -39,20 +39,17 @@ export default function FindActivity({ meta, onDone }) {
     if (b.gone) return;
     if (b.ch === current) {
       setBubbles((list) => list.map((x) => (x.id === b.id ? { ...x, gone: true } : x)));
+      // onDone 会改父组件的 state，不能放进 setTargetIdx 的 updater 里
+      // （React 会在 render 阶段跑 updater，导致「在渲染别的组件时更新组件」警告）
       setTimeout(() => {
-        setTargetIdx((t) => {
-          if (t + 1 >= targets.length) {
-            onDone();
-            return t;
-          }
-          return t + 1;
-        });
+        if (targetIdx + 1 >= targets.length) onDone();
+        else setTargetIdx((t) => t + 1);
       }, 350);
     } else {
       setShakeId(b.id);
       setTimeout(() => setShakeId(null), 450);
     }
-  }, [current, targets.length, onDone]);
+  }, [current, targetIdx, targets.length, onDone]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>

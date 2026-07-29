@@ -20,7 +20,8 @@
       "Bash(/opt/homebrew/bin/node pinyin-test.js)",
       "Bash(/opt/homebrew/bin/node pick8.js)",
       "Bash(/opt/homebrew/bin/node gen-sql.js)",
-      "Bash(/opt/homebrew/bin/npm run *)"
+      "Bash(/opt/homebrew/bin/npm run *)",
+      "Bash(curl -s \"http://localhost:5173/src/activities/FindActivity.jsx\")"
     ]
   }
 }

@@ -3,7 +3,7 @@ import { C, ACTIVITIES } from "../theme";
 /* ===================================================================
    历史记录 —— 本班上过的课，倒序排列，可进入回顾模式重玩。
    =================================================================== */
-export default function ArchivePanel({ lessons, activeId, charsOf, getProgress, onClose, onReview }) {
+export default function ArchivePanel({ lessons, currentId, charsOf, getProgress, onClose, onReview }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)" }} />
@@ -27,7 +27,7 @@ export default function ArchivePanel({ lessons, activeId, charsOf, getProgress, 
         {(lessons || []).map((l) => {
           const pr = getProgress(l.id);
           const stars = ACTIVITIES.filter((_, i) => pr[i]).length;
-          const isCur = l.id === activeId;
+          const isCur = l.id === currentId;
           return (
             <div key={l.id} style={{
               background: isCur ? "#EAF6EC" : C.card, border: `2px solid ${isCur ? C.bamboo : C.border}`,
@@ -35,7 +35,11 @@ export default function ArchivePanel({ lessons, activeId, charsOf, getProgress, 
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span style={{ fontSize: 19, fontWeight: 800 }}>{l.title}</span>
-                {isCur && <span style={{ fontSize: 13, color: C.bamboo, fontWeight: 700 }}>正在上</span>}
+                {isCur && (
+                  <span style={{ fontSize: 13, color: C.bamboo, fontWeight: 700 }}>
+                    {l.status === "active" ? "正在上" : "刚上完"}
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 13, color: "#9C9382", margin: "2px 0 6px" }}>
                 第 {l.seq} 次课 · {new Date(l.started_at).toLocaleDateString("zh-CN")}

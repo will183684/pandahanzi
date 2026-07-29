@@ -112,14 +112,18 @@ export default function PandaHanziApp() {
   }, [activeClass, reload]);
 
   /* ---------------- 派生 ---------------- */
-  const activeLesson = useMemo(
-    () => classLessons.find((l) => l.status === "active") || null,
-    [classLessons]
-  );
+  /* 当前这节课：优先「正在上」的那节；老师点过「完成本课」之后就没有 active 了，
+     这时回退到最近上过的一节 —— 否则学生首页会立刻变成「还没安排」，
+     想复习刚上完的课只能去翻历史记录。 */
+  const currentLesson = useMemo(() => {
+    const active = classLessons.find((l) => l.status === "active");
+    if (active) return active;
+    return classLessons.reduce((best, l) => (!best || l.seq > best.seq ? l : best), null);
+  }, [classLessons]);
   const reviewing = reviewId != null;
   const viewLesson = useMemo(
-    () => (reviewing ? classLessons.find((l) => l.id === reviewId) || null : activeLesson),
-    [reviewing, reviewId, classLessons, activeLesson]
+    () => (reviewing ? classLessons.find((l) => l.id === reviewId) || null : currentLesson),
+    [reviewing, reviewId, classLessons, currentLesson]
   );
   const viewLessonId = viewLesson ? viewLesson.id : null;
 
@@ -191,19 +195,23 @@ export default function PandaHanziApp() {
   }, [activeClass, classLessons, run]);
 
   const saveLesson = useCallback((patch) => {
-    if (!activeLesson) return;
-    run(() => updateClassLesson(activeLesson.id, patch), "已保存 ✅", "保存失败 ⚠️");
-  }, [activeLesson, run]);
+    if (!currentLesson) return;
+    run(() => updateClassLesson(currentLesson.id, patch), "已保存 ✅", "保存失败 ⚠️");
+  }, [currentLesson, run]);
 
   const saveChars = useCallback((rows) => {
-    if (!activeLesson) return;
-    run(() => saveClassLessonChars(activeLesson.id, rows), null, "字表保存失败 ⚠️");
-  }, [activeLesson, run]);
+    if (!currentLesson) return;
+    run(() => saveClassLessonChars(currentLesson.id, rows), null, "字表保存失败 ⚠️");
+  }, [currentLesson, run]);
 
   const finishLesson = useCallback(() => {
-    if (!activeLesson) return;
-    run(() => completeClassLesson(activeLesson.id), "本课已完成 ✅", "操作失败 ⚠️");
-  }, [activeLesson, run]);
+    if (!currentLesson || currentLesson.status !== "active") return;
+    run(
+      () => completeClassLesson(currentLesson.id),
+      "本课已完成 ✅　学生仍可继续复习，直到你选下一课",
+      "操作失败 ⚠️"
+    );
+  }, [currentLesson, run]);
 
   /* ---------------- 学生完成一个活动 ---------------- */
   const markComplete = useCallback((activityIndex) => {
@@ -285,7 +293,7 @@ export default function PandaHanziApp() {
 
   const archive = archiveOpen ? (
     <ArchivePanel
-      lessons={lessonsNewestFirst} activeId={activeLesson ? activeLesson.id : null}
+      lessons={lessonsNewestFirst} currentId={currentLesson ? currentLesson.id : null}
       charsOf={charsOf} getProgress={getProgressFor}
       onClose={() => setArchiveOpen(false)} onReview={openReview}
     />
@@ -308,7 +316,7 @@ export default function PandaHanziApp() {
             className={activeClass.name}
             roster={activeClass.students || []}
             activeClassId={activeClass.id}
-            lesson={activeLesson}
+            lesson={currentLesson}
             chars={viewChars}
             progressRows={progressRows}
             busy={busy}

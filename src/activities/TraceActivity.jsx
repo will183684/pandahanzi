@@ -53,6 +53,10 @@ export default function TraceActivity({ meta, onDone }) {
   // when moving to a new character, give Hanzi Writer another chance
   useEffect(() => { setCharFallback(false); setDone(false); }, [idx]);
 
+  // Hanzi Writer 的 onComplete 回调闭包里拿不到最新的 idx，用 ref 兜住。
+  const idxRef = useRef(0);
+  useEffect(() => { idxRef.current = idx; }, [idx]);
+
   const startQuiz = useCallback((w) => {
     try {
       w.quiz({
@@ -61,11 +65,10 @@ export default function TraceActivity({ meta, onDone }) {
         highlightOnComplete: true,
         onComplete: () => {
           setDone(true);
+          // onDone 改的是父组件 state，不能放进 setIdx 的 updater 里
           setTimeout(() => {
-            setIdx((prev) => {
-              if (prev + 1 >= chars.length) { onDone(); return prev; }
-              return prev + 1;
-            });
+            if (idxRef.current + 1 >= chars.length) onDone();
+            else setIdx((i) => i + 1);
           }, 900);
         },
       });
