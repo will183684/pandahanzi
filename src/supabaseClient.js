@@ -11,18 +11,12 @@ export const supabase = createClient(url || "http://localhost", anonKey || "publ
   realtime: { params: { eventsPerSecond: 5 } },
 });
 
+/* kv 表现在只剩下名册类数据（班级 / 学生 / 老师），
+   课程和进度都已经迁到 characters / lessons / class_* 那几张关系表。 */
 const TABLE = "kv";
-const ROOT = "__root__";       // holds the class registry
-const LIB = "__library__";     // holds the shared lesson library
+const ROOT = "__root__";       // holds the class / teacher registries
 
 /* ---- class-scoped key/value ---- */
-export async function kvFetchAll(classId) {
-  const { data, error } = await supabase.from(TABLE).select("key,value").eq("class_id", classId);
-  if (error) throw error;
-  const map = {};
-  (data || []).forEach((row) => { map[row.key] = row.value; });
-  return map;
-}
 export async function kvGet(classId, key) {
   const { data, error } = await supabase.from(TABLE).select("value").eq("class_id", classId).eq("key", key).maybeSingle();
   if (error) throw error;
@@ -34,11 +28,6 @@ export async function kvSet(classId, key, value) {
     .upsert({ class_id: classId, key, value, updated_at: new Date().toISOString() }, { onConflict: "class_id,key" });
   if (error) throw error;
 }
-export async function kvSetMany(classId, rows) {
-  const payload = rows.map(([key, value]) => ({ class_id: classId, key, value, updated_at: new Date().toISOString() }));
-  const { error } = await supabase.from(TABLE).upsert(payload, { onConflict: "class_id,key" });
-  if (error) throw error;
-}
 
 /* ---- class registry (all classes) ---- */
 export async function getClasses() {
@@ -48,9 +37,13 @@ export async function getClasses() {
 export async function saveClasses(list) {
   await kvSet(ROOT, "classes", list);
 }
+/* 删班：kv 里的名册 + 关系表里的排课都要清掉，否则留下孤儿数据。
+   class_lesson_chars / lesson_progress 由外键 on delete cascade 跟着删。 */
 export async function deleteClassRecords(classId) {
   const { error } = await supabase.from(TABLE).delete().eq("class_id", classId);
   if (error) throw error;
+  const { error: e2 } = await supabase.from("class_lessons").delete().eq("class_id", classId);
+  if (e2) throw e2;
 }
 
 /* ---- teacher registry ---- */
@@ -219,17 +212,4 @@ export async function markProgress(classLessonId, studentName, activityKey) {
     { onConflict: "class_lesson_id,student_name,activity_key" }
   );
   if (error) throw error;
-}
-
-/* ---- shared lesson library (reusable weekly content) ---- */
-export async function getLibraryLessons() {
-  const kv = await kvFetchAll(LIB);
-  const idx = Array.isArray(kv["index"]) ? kv["index"] : [];
-  return idx.map((id) => kv["lesson:" + id]).filter(Boolean);
-}
-export async function addLibraryLesson(lesson) {
-  const kv = await kvFetchAll(LIB);
-  const idx = Array.isArray(kv["index"]) ? kv["index"] : [];
-  const nidx = idx.includes(lesson.id) ? idx : [...idx, lesson.id];
-  await kvSetMany(LIB, [["lesson:" + lesson.id, lesson], ["index", nidx]]);
 }

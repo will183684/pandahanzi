@@ -2,22 +2,6 @@
    Small pure helpers shared across activities & screens
    ============================================================ */
 
-const CN_DIGITS = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
-
-/* Spell a small integer as a Chinese numeral (used for week labels). */
-export function cnNumber(num) {
-  if (num <= 0) return "零";
-  if (num < 10) return CN_DIGITS[num];
-  if (num === 10) return "十";
-  if (num < 20) return "十" + CN_DIGITS[num % 10];
-  if (num < 100) {
-    const tens = Math.floor(num / 10);
-    const ones = num % 10;
-    return CN_DIGITS[tens] + "十" + (ones ? CN_DIGITS[ones] : "");
-  }
-  return String(num);
-}
-
 /* Fisher–Yates shuffle returning a new array. */
 export function shuffled(arr) {
   const a = arr.slice();
