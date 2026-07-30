@@ -5,6 +5,7 @@ import FlashcardActivity from "./FlashcardActivity";
 import FindActivity from "./FindActivity";
 import TraceActivity from "./TraceActivity";
 import BuildActivity from "./BuildActivity";
+import BuildWordActivity from "./BuildWordActivity";
 
 /* ===================================================================
    Activity host — wraps a single activity with header + celebration.
@@ -30,6 +31,7 @@ export default function ActivityHost({ activityIndex, meta, readOnly, onComplete
   if (def.key === "flash") inner = <FlashcardActivity meta={meta} onDone={finish} />;
   else if (def.key === "find") inner = <FindActivity meta={meta} onDone={finish} />;
   else if (def.key === "trace") inner = <TraceActivity meta={meta} onDone={finish} />;
+  else if (def.key === "word") inner = <BuildWordActivity meta={meta} onDone={finish} />;
   else if (def.key === "build") inner = <BuildActivity meta={meta} onDone={finish} />;
 
   return (

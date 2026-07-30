@@ -16,7 +16,7 @@ export const ghostBtn = {
    =================================================================== */
 export default function TeacherArea({
   role, className, roster, activeClassId,
-  lesson, chars, progressRows,
+  lesson, chars, charsFor, progressRows,
   onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson,
   onOpenArchive, onLogout, onSaveClasses, pushToast, busy,
 }) {
@@ -58,7 +58,7 @@ export default function TeacherArea({
       )}
       {view === "content" && (
         <ContentSettings
-          lesson={lesson} chars={chars} busy={busy} pushToast={pushToast}
+          lesson={lesson} chars={chars} charsFor={charsFor} busy={busy} pushToast={pushToast}
           onOpenPicker={onOpenPicker} onSaveLesson={onSaveLesson}
           onSaveChars={onSaveChars} onCompleteLesson={onCompleteLesson}
         />

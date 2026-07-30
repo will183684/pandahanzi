@@ -37,5 +37,6 @@ export const ACTIVITIES = [
   { key: "flash", emoji: "🃏", name: "认一认", desc: "翻卡片认识汉字" },
   { key: "find", emoji: "🔍", name: "找一找", desc: "在泡泡里找到汉字" },
   { key: "trace", emoji: "✏️", name: "描一描", desc: "看笔顺，照着描" },
+  { key: "word", emoji: "🔤", name: "拼词语", desc: "把字拼成词语" },
   { key: "build", emoji: "🧩", name: "拼句子", desc: "把字拼成一句话" },
 ];

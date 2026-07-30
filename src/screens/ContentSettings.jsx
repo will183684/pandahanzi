@@ -8,7 +8,7 @@ import { Card, BigButton } from "../components/ui";
    所有改动只落在本班的副本上，不影响课程库。
    =================================================================== */
 export default function ContentSettings({
-  lesson, chars, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, pushToast, busy,
+  lesson, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, pushToast, busy,
 }) {
   const [title, setTitle] = useState("");
   const [vocabStr, setVocabStr] = useState("");
@@ -16,18 +16,19 @@ export default function ContentSettings({
   const [rows, setRows] = useState([]);
   const [dirty, setDirty] = useState(false);
 
-  /* 重置表单的时机：换了另一节课，或首次拿到这节课的字表（字表是异步到的，
-     lesson 先就位、chars 还空，所以不能只看 lesson.id）。
-     之后 realtime 刷新不再重置，免得打断老师输入。 */
+  /* 播种表单的时机：字表确实属于当前这节课（charsFor === lesson.id），
+     且还没为这节课播种过。
+     —— chars 是异步到的：换课时 lesson 先更新、chars 还是上一课的，
+        只看 lesson.id 会把旧字表灌进表单。charsFor 由 App 维护，标明
+        手上这份 chars 属于哪节课。
+     —— 播种一次之后不再重置，免得 realtime 刷新打断老师输入。 */
   const loadedFor = useRef(null);
-  const seededChars = useRef(false);
   useEffect(() => {
-    if (!lesson) { loadedFor.current = null; seededChars.current = false; return; }
+    if (!lesson) { loadedFor.current = null; return; }
+    if (charsFor !== lesson.id) return;
+    if (loadedFor.current === lesson.id) return;
     const list = chars || [];
-    const isNewLesson = loadedFor.current !== lesson.id;
-    if (!isNewLesson && (seededChars.current || list.length === 0)) return;
     loadedFor.current = lesson.id;
-    seededChars.current = list.length > 0;
     setTitle(lesson.title || "");
     setVocabStr((lesson.vocab || []).join(" "));
     setSentence(lesson.sentence || "");
@@ -35,7 +36,7 @@ export default function ContentSettings({
       hanzi: c.hanzi, pinyin: c.pinyin || "", emoji: c.emoji || "", audio_url: c.audio_url || null,
     })));
     setDirty(false);
-  }, [lesson, chars]);
+  }, [lesson, chars, charsFor]);
 
   /* ---------------- 录音 ---------------- */
   const [recIdx, setRecIdx] = useState(null);
@@ -168,6 +169,11 @@ export default function ContentSettings({
         </div>
       </Card>
     );
+  }
+
+  /* 字表还在路上 —— 别渲染上一课的残留 */
+  if (charsFor !== lesson.id) {
+    return <Card><p style={{ color: "#9C9382", margin: 0 }}>正在加载本课字表…</p></Card>;
   }
 
   return (

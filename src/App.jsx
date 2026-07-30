@@ -127,13 +127,16 @@ export default function PandaHanziApp() {
   );
   const viewLessonId = viewLesson ? viewLesson.id : null;
 
-  /* 当前查看那节课的完整字表（含录音） */
+  /* 当前查看那节课的完整字表（含录音）。
+     charsFor 记录 viewChars 属于哪节课 —— 字表是异步到的，不记的话
+     在它到达之前学生会闪一下「老师还没安排」。 */
+  const [charsFor, setCharsFor] = useState(null);
   useEffect(() => {
-    if (!viewLessonId) { setViewChars([]); return undefined; }
+    if (!viewLessonId) { setViewChars([]); setCharsFor(null); return undefined; }
     let alive = true;
     getClassLessonChars(viewLessonId)
-      .then((cs) => { if (alive) setViewChars(cs); })
-      .catch(() => {});
+      .then((cs) => { if (alive) { setViewChars(cs); setCharsFor(viewLessonId); } })
+      .catch(() => { if (alive) setCharsFor(viewLessonId); });
     return () => { alive = false; };
   }, [viewLessonId, charsTick]);
 
@@ -318,6 +321,7 @@ export default function PandaHanziApp() {
             activeClassId={activeClass.id}
             lesson={currentLesson}
             chars={viewChars}
+            charsFor={charsFor}
             progressRows={progressRows}
             busy={busy}
             onOpenPicker={() => setPickerOpen(true)}
@@ -343,6 +347,19 @@ export default function PandaHanziApp() {
   }
 
   /* ---------------- 家长 / 学生 ---------------- */
+  /* 这节课的字表还在路上 —— 显示加载中，别误报「没安排」 */
+  if (viewLesson && charsFor !== viewLesson.id) {
+    return (
+      <Shell banner={reviewBanner}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "48px 0" }}>
+          <div style={{ animation: "pa-jump 1.2s ease-in-out infinite" }}><Panda sz={110} ex="curious" /></div>
+          <p style={{ color: "#8A8276" }}>正在加载…</p>
+        </div>
+        <Toast msg={toast} />
+      </Shell>
+    );
+  }
+
   if (!reviewing && (!viewMeta || viewMeta.chars.length === 0)) {
     return (
       <Shell banner={reviewBanner}>

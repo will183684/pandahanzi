@@ -145,7 +145,7 @@ export default function LessonPicker({ curriculum, classLessons, onPick, onClose
         })}
 
         <p style={{ fontSize: 12, color: "#9C9382", marginTop: 16, lineHeight: 1.6 }}>
-          选用后会把这课的 5 个字拷进本班，之后可以在「内容」里加字、删字、改拼音、录音——
+          选用后会把这课的字（连同拼音、词语、句子）拷进本班，之后可以在「内容」里加字、删字、改拼音、录音——
           改动只影响本班，不会动课程库。上一节课会自动标记为已完成。
         </p>
 

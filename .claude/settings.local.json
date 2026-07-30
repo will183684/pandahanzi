@@ -21,7 +21,23 @@
       "Bash(/opt/homebrew/bin/node pick8.js)",
       "Bash(/opt/homebrew/bin/node gen-sql.js)",
       "Bash(/opt/homebrew/bin/npm run *)",
-      "Bash(curl -s \"http://localhost:5173/src/activities/FindActivity.jsx\")"
+      "Bash(curl -s \"http://localhost:5173/src/activities/FindActivity.jsx\")",
+      "Bash(gh repo *)",
+      "Bash(git ls-remote *)",
+      "Bash(git clone *)",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"=== TSC EXIT: $? ===\")",
+      "Bash(npm run *)",
+      "Bash(git -C /Users/caizhao/Documents/panda status --short)",
+      "Bash(node recalc_difftest.mjs)",
+      "Bash(git -C /Users/caizhao/Documents/panda log --oneline -1)",
+      "Bash(git -C /Users/caizhao/Documents/PandaArtAttendance status --short)",
+      "Bash(git -C /Users/caizhao/Documents/PandaArtAttendance log --oneline -1)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(/opt/homebrew/bin/node dump10.js)",
+      "Bash(/opt/homebrew/bin/node -e ' *)",
+      "Bash(/opt/homebrew/bin/node verify.js)"
     ]
   }
 }
