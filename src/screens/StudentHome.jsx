@@ -48,7 +48,13 @@ export default function StudentHome({ studentName, meta, progress, readOnly, onO
             <span style={{ fontSize: 38 }}>{a.emoji}</span>
             <span style={{ flex: 1 }}>
               <span style={{ display: "block", fontSize: 19, fontWeight: 800 }}>{a.name}</span>
-              <span style={{ display: "block", fontSize: 14, color: "#8A8276" }}>{a.desc}</span>
+              <span style={{
+                display: "block", fontSize: 14,
+                color: progress[i] ? C.bamboo : "#8A8276",
+                fontWeight: progress[i] ? 700 : 400,
+              }}>
+                {progress[i] ? "✅ 已完成 · 点一下再做一遍" : a.desc}
+              </span>
             </span>
             <span style={{ fontSize: 26 }}>{progress[i] ? "⭐" : ""}</span>
           </button>

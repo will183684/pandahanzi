@@ -392,6 +392,7 @@ export default function PandaHanziApp() {
       ) : (
         <ActivityHost
           activityIndex={activeActivity} meta={viewMeta} readOnly={reviewing}
+          done={!!viewProgress[activeActivity]}
           onComplete={markComplete} onBack={() => setActiveActivity(null)}
         />
       )}

@@ -42,15 +42,16 @@ export function Confetti({ count = 80 }) {
   );
 }
 
-/* ===================== Small celebration overlay ===================== */
-export function CelebrationOverlay({ text, onClose }) {
+/* ===================== Small celebration overlay =====================
+   做完一个活动后弹出。给出「再做一遍」和「回去」两个明确出口，
+   不再用「轻触任意处」——免得孩子想重玩却被误关掉。 */
+export function CelebrationOverlay({ text, onReplay, onClose }) {
   return (
     <div
-      onClick={onClose}
       style={{
         position: "absolute", inset: 0, zIndex: 30, display: "flex",
         flexDirection: "column", alignItems: "center", justifyContent: "center",
-        background: "rgba(253,246,236,0.94)", textAlign: "center", padding: 24, cursor: "pointer",
+        background: "rgba(253,246,236,0.94)", textAlign: "center", padding: 24,
       }}
     >
       <Confetti count={70} />
@@ -59,7 +60,10 @@ export function CelebrationOverlay({ text, onClose }) {
       </div>
       <div style={{ fontSize: 40, letterSpacing: 6, marginTop: 8 }}>⭐⭐⭐</div>
       <div style={{ fontSize: 24, fontWeight: 800, color: C.ink, marginTop: 10 }}>{text}</div>
-      <div style={{ marginTop: 16, fontSize: 15, color: "#8A8276" }}>轻触任意处继续</div>
+      <div style={{ display: "flex", gap: 12, marginTop: 20, flexWrap: "wrap", justifyContent: "center", position: "relative", zIndex: 1 }}>
+        <BigButton color={C.gold} onClick={onReplay}>再做一遍 🔄</BigButton>
+        <BigButton color={C.bamboo} onClick={onClose}>回去 →</BigButton>
+      </div>
     </div>
   );
 }
