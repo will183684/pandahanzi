@@ -42,7 +42,20 @@
       "Read(//Users/caizhao/Desktop/**)",
       "Bash(sips -Z 640 ~/Downloads/pandachinese.png --out public/logo.png)",
       "Bash(sips -Z 180 ~/Downloads/pandachinese.png --out public/favicon.png)",
-      "Bash(sips -g pixelWidth -g pixelHeight public/logo.png public/favicon.png)"
+      "Bash(sips -g pixelWidth -g pixelHeight public/logo.png public/favicon.png)",
+      "Bash(python3 -c \"import PIL; print\\('PIL', PIL.__version__\\)\")",
+      "Bash(sips --help)",
+      "Read(//private/tmp/**)",
+      "Bash(sips -c 520 520 --cropOffset 80 370 ~/Downloads/pandachinese.png --out /tmp/mascot_try.png)",
+      "Bash(sips -Z 300 /tmp/mascot_try.png --out /tmp/mascot_try.png)",
+      "Read(//tmp/**)",
+      "Bash(sips -c 580 580 --cropOffset 60 310 ~/Downloads/pandachinese.png --out /tmp/m2.png)",
+      "Bash(sips -Z 300 /tmp/m2.png --out /tmp/m2.png)",
+      "Bash(sips -c 580 580 --cropOffset 60 310 ~/Downloads/pandachinese.png --out public/mascot.png)",
+      "Bash(sips -Z 320 public/mascot.png --out public/mascot.png)",
+      "Bash(sips -c 500 500 --cropOffset 95 380 ~/Downloads/pandachinese.png --out /tmp/m3.png)",
+      "Bash(sips -Z 300 /tmp/m3.png --out /tmp/m3.png)",
+      "Bash(awk '{print $5}')"
     ]
   }
 }
