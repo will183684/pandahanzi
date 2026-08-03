@@ -53,5 +53,4 @@ export const ACTIVITIES = [
   { key: "trace",  emoji: "✏️", name: "描一描", desc: "看笔顺，照着描" },
   { key: "word",   emoji: "🔤", name: "拼词语", desc: "把字拼成词语" },
   { key: "build",  emoji: "🧩", name: "拼句子", desc: "把字拼成一句话" },
-  { key: "speed",  emoji: "⚡", name: "抢一抢", desc: "限时抢答，看谁快" },
 ];

@@ -7,7 +7,6 @@ import TraceActivity from "./TraceActivity";
 import BuildActivity from "./BuildActivity";
 import BuildWordActivity from "./BuildWordActivity";
 import ListenActivity from "./ListenActivity";
-import SpeedActivity from "./SpeedActivity";
 
 /* ===================================================================
    Activity host — wraps a single activity with header + celebration.
@@ -43,7 +42,6 @@ export default function ActivityHost({ activityIndex, meta, readOnly, done, avat
   else if (def.key === "trace") inner = <TraceActivity meta={meta} onDone={finish} />;
   else if (def.key === "word") inner = <BuildWordActivity meta={meta} onDone={finish} />;
   else if (def.key === "build") inner = <BuildActivity meta={meta} onDone={finish} />;
-  else if (def.key === "speed") inner = <SpeedActivity meta={meta} onDone={finish} />;
 
   return (
     <div style={{ position: "relative" }}>
