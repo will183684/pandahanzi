@@ -18,7 +18,7 @@ import LessonPicker from "./screens/LessonPicker";
 import TeacherArea, { ghostBtn } from "./screens/TeacherArea";
 
 /* ============================================================
-   熊猫画画班 · 汉字练习
+   Panda Chinese · 中文识字
    根组件：持有当前班级 + 排课状态，落库到 Supabase，并在
    登录页 / 学生页 / 老师页之间路由。
    课程库（1200 字 / 240 课）是全局只读数据，进程内缓存一次。

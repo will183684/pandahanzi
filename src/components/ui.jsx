@@ -114,17 +114,19 @@ export function Shell({ children, banner }) {
         display: "flex", alignItems: "center", gap: 10, padding: "10px 16px",
         background: C.card, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 20,
       }}>
+        {/* 表头用矢量熊猫而不是 logo 图：完整 logo 含两行英文和橙色横幅，
+            缩到 38px 会糊成噪点。品牌名由旁边的文字承载。 */}
         <Panda sz={38} ex="neutral" />
-        <span style={{ fontWeight: 800, fontSize: 17 }}>熊猫画画班</span>
+        <span style={{ fontWeight: 800, fontSize: 17 }}>Panda Chinese</span>
         <span style={{ color: "#B7AE9F" }}>｜</span>
-        <span style={{ fontWeight: 600, fontSize: 15, color: "#6B6356" }}>汉字练习</span>
+        <span style={{ fontWeight: 600, fontSize: 15, color: "#6B6356" }}>中文识字</span>
       </header>
       {banner}
       <main style={{ flex: 1, width: "100%", maxWidth: 920, margin: "0 auto", padding: "16px", boxSizing: "border-box" }}>
         {children}
       </main>
       <footer style={{ textAlign: "center", padding: "14px", color: "#9C9382", fontSize: 14 }}>
-        画画写字，一起进步 🐼
+        一起学中文，天天有进步 🐼
       </footer>
     </div>
   );

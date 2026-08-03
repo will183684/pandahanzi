@@ -2,7 +2,6 @@ import { useState } from "react";
 import { C, ADMIN_CODE } from "../theme";
 import { normCode } from "../utils";
 import { getClasses, saveClasses, deleteClassRecords, getTeachers } from "../supabaseClient";
-import Panda from "../components/Panda";
 import { Card, BigButton } from "../components/ui";
 
 /* ===================================================================
@@ -131,9 +130,13 @@ export default function Landing({ onEnter, pushToast }) {
   return (
     <div style={{ maxWidth: 460, margin: "10px auto" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 18 }}>
-        <Panda sz={110} ex="curious" />
-        <h1 style={{ fontSize: 24, margin: "8px 0 2px" }}>熊猫画画班</h1>
-        <p style={{ color: "#8A8276", margin: 0 }}>欢迎回来，一起练汉字吧！</p>
+        {/* logo 原图是白底不透明，用圆角处理成贴纸感，免得在米色背景上露白方块 */}
+        <img
+          src="/logo.png"
+          alt="Panda Chinese · 中文识字线上课程"
+          style={{ width: "min(240px, 62vw)", height: "auto", display: "block", borderRadius: 26 }}
+        />
+        <p style={{ color: "#8A8276", margin: "12px 0 0" }}>欢迎回来，一起练汉字吧！</p>
       </div>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 14, background: "#F1E9DC", padding: 6, borderRadius: 14 }}>

@@ -37,7 +37,12 @@
       "Read(//opt/homebrew/bin/**)",
       "Bash(/opt/homebrew/bin/node dump10.js)",
       "Bash(/opt/homebrew/bin/node -e ' *)",
-      "Bash(/opt/homebrew/bin/node verify.js)"
+      "Bash(/opt/homebrew/bin/node verify.js)",
+      "Bash(grep -iE \"\\\\.\\(png|jpg|jpeg|webp\\)$\")",
+      "Read(//Users/caizhao/Desktop/**)",
+      "Bash(sips -Z 640 ~/Downloads/pandachinese.png --out public/logo.png)",
+      "Bash(sips -Z 180 ~/Downloads/pandachinese.png --out public/favicon.png)",
+      "Bash(sips -g pixelWidth -g pixelHeight public/logo.png public/favicon.png)"
     ]
   }
 }
