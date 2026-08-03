@@ -55,7 +55,13 @@
       "Bash(sips -Z 320 public/mascot.png --out public/mascot.png)",
       "Bash(sips -c 500 500 --cropOffset 95 380 ~/Downloads/pandachinese.png --out /tmp/m3.png)",
       "Bash(sips -Z 300 /tmp/m3.png --out /tmp/m3.png)",
-      "Bash(awk '{print $5}')"
+      "Bash(awk '{print $5}')",
+      "Bash(sips -c 600 600 --cropOffset 50 330 ~/Downloads/pandachinese.png --out /tmp/m4.png)",
+      "Bash(sips -Z 300 /tmp/m4.png --out /tmp/m4.png)",
+      "Bash(sips -c 510 510 --cropOffset 105 375 ~/Downloads/pandachinese.png --out /tmp/head.png)",
+      "Bash(sips -p 660 660 --padColor FED820 /tmp/head.png --out /tmp/padded.png)",
+      "Bash(sips -Z 320 /tmp/padded.png --out /tmp/padded.png)",
+      "Bash(cp /tmp/padded.png public/mascot.png && ls -lh public/mascot.png)"
     ]
   }
 }
