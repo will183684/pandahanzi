@@ -6,6 +6,9 @@ import FindActivity from "./FindActivity";
 import TraceActivity from "./TraceActivity";
 import BuildActivity from "./BuildActivity";
 import BuildWordActivity from "./BuildWordActivity";
+import ListenActivity from "./ListenActivity";
+import MemoryMatchActivity from "./MemoryMatchActivity";
+import SpeedActivity from "./SpeedActivity";
 
 /* ===================================================================
    Activity host — wraps a single activity with header + celebration.
@@ -36,10 +39,13 @@ export default function ActivityHost({ activityIndex, meta, readOnly, done, onCo
 
   let inner = null;
   if (def.key === "flash") inner = <FlashcardActivity meta={meta} onDone={finish} />;
+  else if (def.key === "listen") inner = <ListenActivity meta={meta} onDone={finish} />;
   else if (def.key === "find") inner = <FindActivity meta={meta} onDone={finish} />;
+  else if (def.key === "memory") inner = <MemoryMatchActivity meta={meta} onDone={finish} />;
   else if (def.key === "trace") inner = <TraceActivity meta={meta} onDone={finish} />;
   else if (def.key === "word") inner = <BuildWordActivity meta={meta} onDone={finish} />;
   else if (def.key === "build") inner = <BuildActivity meta={meta} onDone={finish} />;
+  else if (def.key === "speed") inner = <SpeedActivity meta={meta} onDone={finish} />;
 
   return (
     <div style={{ position: "relative" }}>

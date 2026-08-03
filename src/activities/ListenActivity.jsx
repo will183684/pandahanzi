@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { C } from "../theme";
 import { shuffled } from "../utils";
 import { BigButton } from "../components/ui";
+import { playChar, stopAudio } from "../audio";
 
 /* ===================================================================
-   听一听 (Listen & Choose) — alternate game, not currently wired into
-   ACTIVITIES. Plays the character's sound via browser SpeechSynthesis
-   (or a teacher recording); the child taps the matching character.
+   听一听 —— 放字音（老师录音优先，否则 TTS），孩子从四个字里点出来。
+   对应马立平的「听音辨字」。
    =================================================================== */
 export default function ListenActivity({ meta, onDone }) {
   const chars = meta.chars;
@@ -19,81 +19,28 @@ export default function ListenActivity({ meta, onDone }) {
   const options = useMemo(() => {
     const fillers = (meta.distractors && meta.distractors.length ? meta.distractors : ["大", "小", "上", "下"])
       .filter((d) => d !== target);
-    const picks = shuffled(fillers).slice(0, 3);
-    return shuffled([target, ...picks]);
+    return shuffled([target, ...shuffled(fillers).slice(0, 3)]);
   }, [target, meta.distractors]);
 
-  const speak = useCallback((text) => {
-    try {
-      const synth = window.speechSynthesis;
-      if (!synth) { setAudioOk(false); return; }
-      // Only clear the queue if something is actually playing/pending —
-      // calling cancel() every time is what tends to wedge the engine.
-      // Speak SYNCHRONOUSLY so it stays tied to the user gesture (a
-      // deferred speak gets blocked by the browser's autoplay policy).
-      if (synth.speaking || synth.pending) synth.cancel();
-      const u = new window.SpeechSynthesisUtterance(text);
-      u.lang = "zh-CN";
-      u.rate = 0.8;
-      const voices = synth.getVoices() || [];
-      const zh = voices.find((v) => /zh|cmn|chinese/i.test(v.lang) || /chinese|中文|普通话/i.test(v.name));
-      if (zh) u.voice = zh;
-      u.onerror = () => { /* swallow transient engine errors */ };
-      synth.speak(u);
-    } catch (err) {
-      setAudioOk(false);
-    }
-  }, []);
+  const play = useCallback(() => {
+    setAudioOk(playChar(target, meta.audioMap));
+  }, [target, meta.audioMap]);
 
-  // Keep-alive: resume() while speaking defeats the "stops after ~15s"
-  // bug; cancel any lingering speech when leaving the activity.
+  /* 换到下一个字时自动播一次 */
   useEffect(() => {
-    const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
-    if (!synth) return undefined;
-    const keepAlive = setInterval(() => {
-      try { if (synth.speaking) synth.resume(); } catch (e) { /* ignore */ }
-    }, 8000);
-    return () => {
-      clearInterval(keepAlive);
-      try { synth.cancel(); } catch (e) { /* ignore */ }
-    };
-  }, []);
-
-  // Play the teacher's recording if one exists, else fall back to TTS.
-  const audioElRef = useRef(null);
-  const playSound = useCallback((ch) => {
-    const url = meta.audioMap && meta.audioMap[ch];
-    if (url) {
-      try {
-        if (!audioElRef.current) audioElRef.current = new window.Audio();
-        const el = audioElRef.current;
-        el.src = url;
-        el.currentTime = 0;
-        const p = el.play();
-        if (p && p.catch) p.catch(() => speak(ch));
-        return;
-      } catch (e) { /* fall through to TTS */ }
-    }
-    speak(ch);
-  }, [meta.audioMap, speak]);
-
-  // play whenever the target character changes
-  useEffect(() => {
-    const t = setTimeout(() => playSound(target), 250);
+    const t = setTimeout(play, 250);
     return () => clearTimeout(t);
-  }, [target, playSound]);
+  }, [play]);
+
+  useEffect(() => stopAudio, []);
 
   const onPick = useCallback((ch) => {
     if (solved) return;
     if (ch === target) {
       setSolved(true);
       setTimeout(() => {
-        if (idx + 1 >= chars.length) {
-          onDone();
-        } else {
-          setIdx((i) => i + 1);
-          setSolved(false);
-        }
+        if (idx + 1 >= chars.length) onDone();
+        else { setIdx((i) => i + 1); setSolved(false); }
       }, 650);
     } else {
       setShakeCh(ch);
@@ -103,10 +50,10 @@ export default function ListenActivity({ meta, onDone }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 18 }}>
-      <p style={{ fontSize: 16, color: "#6B6356" }}>听一听胖胖读的是哪个字，点出来！</p>
+      <p style={{ fontSize: 16, color: "#6B6356" }}>听一听读的是哪个字，点出来！</p>
 
       <button
-        onClick={() => playSound(target)}
+        onClick={play}
         aria-label="播放字音"
         style={{
           width: 130, height: 130, minWidth: 56, borderRadius: "50%", border: "none", cursor: "pointer",
@@ -118,9 +65,9 @@ export default function ListenActivity({ meta, onDone }) {
       >
         🔊
       </button>
-      <BigButton color={C.bamboo} light onClick={() => playSound(target)}>再听一次 🔁</BigButton>
+      <BigButton color={C.bamboo} light onClick={play}>再听一次 🔁</BigButton>
 
-      {!audioOk && !(meta.audioMap && meta.audioMap[target]) && (
+      {!audioOk && (
         <p style={{ color: C.red, fontSize: 13, margin: 0, textAlign: "center" }}>
           这个设备暂时放不出声音，小提示：这个字读「{meta.pinyins[idx] || ""}」
         </p>
