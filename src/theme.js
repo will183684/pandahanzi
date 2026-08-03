@@ -50,7 +50,6 @@ export const ACTIVITIES = [
   { key: "flash",  emoji: "🃏", name: "认一认", desc: "翻卡片，听读音" },
   { key: "listen", emoji: "👂", name: "听一听", desc: "听读音，选汉字" },
   { key: "find",   emoji: "🔍", name: "找一找", desc: "在泡泡里找到汉字" },
-  { key: "memory", emoji: "🎴", name: "翻翻配对", desc: "把字和读音配成对" },
   { key: "trace",  emoji: "✏️", name: "描一描", desc: "看笔顺，照着描" },
   { key: "word",   emoji: "🔤", name: "拼词语", desc: "把字拼成词语" },
   { key: "build",  emoji: "🧩", name: "拼句子", desc: "把字拼成一句话" },
