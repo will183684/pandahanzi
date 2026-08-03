@@ -46,6 +46,21 @@ export async function deleteClassRecords(classId) {
   if (e2) throw e2;
 }
 
+/* ---- 学生头像 ----
+   存在 kv 里（key = "profile:{名字}"），不用另建表。
+   value 形如 { avatar: "🐯" }。只是个 emoji，不涉及真人照片。 */
+export async function getProfiles(classId) {
+  const { data, error } = await supabase
+    .from(TABLE).select("key,value").eq("class_id", classId).like("key", "profile:%");
+  if (error) throw error;
+  const map = {};
+  (data || []).forEach((r) => { map[r.key.slice("profile:".length)] = r.value || {}; });
+  return map;
+}
+export async function saveProfile(classId, name, profile) {
+  await kvSet(classId, "profile:" + name, profile);
+}
+
 /* ---- teacher registry ---- */
 export async function getTeachers() {
   const v = await kvGet(ROOT, "teachers");

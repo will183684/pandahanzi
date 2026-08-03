@@ -45,7 +45,7 @@ export function Confetti({ count = 80 }) {
 /* ===================== Small celebration overlay =====================
    做完一个活动后弹出。给出「再做一遍」和「回去」两个明确出口，
    不再用「轻触任意处」——免得孩子想重玩却被误关掉。 */
-export function CelebrationOverlay({ text, onReplay, onClose }) {
+export function CelebrationOverlay({ text, avatar, onReplay, onClose }) {
   return (
     <div
       style={{
@@ -56,7 +56,7 @@ export function CelebrationOverlay({ text, onReplay, onClose }) {
     >
       <Confetti count={70} />
       <div style={{ animation: "pa-jump 0.7s ease-in-out infinite" }}>
-        <Panda sz={150} ex="excited" />
+        <Panda sz={150} avatar={avatar} />
       </div>
       <div style={{ fontSize: 40, letterSpacing: 6, marginTop: 8 }}>⭐⭐⭐</div>
       <div style={{ fontSize: 24, fontWeight: 800, color: C.ink, marginTop: 10 }}>{text}</div>

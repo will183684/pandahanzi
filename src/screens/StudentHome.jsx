@@ -6,7 +6,7 @@ import { Confetti, BigButton } from "../components/ui";
 /* ===================================================================
    Student Home
    =================================================================== */
-export default function StudentHome({ studentName, meta, progress, readOnly, onOpenActivity, onOpenArchive, onLogout }) {
+export default function StudentHome({ studentName, meta, progress, readOnly, avatar, onChangeAvatar, onOpenActivity, onOpenArchive, onLogout }) {
   const doneCount = ACTIVITIES.filter((_, i) => progress[i]).length;
   const allDone = doneCount === ACTIVITIES.length;
   const [showFinale, setShowFinale] = useState(false);
@@ -20,9 +20,23 @@ export default function StudentHome({ studentName, meta, progress, readOnly, onO
   return (
     <div style={{ position: "relative" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 6 }}>
-        <div style={{ animation: "pa-jump 1.4s ease-in-out infinite" }}>
-          <Panda sz={120} ex="excited" />
-        </div>
+        <button
+          onClick={onChangeAvatar}
+          title="换一个头像"
+          style={{
+            border: "none", background: "none", padding: 0, cursor: "pointer", lineHeight: 0,
+            animation: "pa-jump 1.4s ease-in-out infinite",
+          }}
+        >
+          <Panda sz={120} avatar={avatar} />
+        </button>
+        <button
+          onClick={onChangeAvatar}
+          style={{
+            border: "none", background: "none", padding: "2px 6px", cursor: "pointer",
+            fontSize: 13, color: "#9C9382", textDecoration: "underline",
+          }}
+        >换个小动物 🔄</button>
         <h1 style={{ margin: "6px 0 0", fontSize: 26 }}>你好，{studentName}！👋</h1>
         <span style={{
           display: "inline-block", background: "#EAF6EC", color: C.bamboo, fontWeight: 700,
@@ -87,7 +101,7 @@ export default function StudentHome({ studentName, meta, progress, readOnly, onO
         }}>
           <Confetti count={120} />
           <div style={{ animation: "pa-jump 0.7s ease-in-out infinite" }}>
-            <Panda sz={170} ex="excited" />
+            <Panda sz={170} avatar={avatar} />
           </div>
           <div style={{ fontSize: 44, letterSpacing: 8, marginTop: 6 }}>🎓</div>
           <h2 style={{ fontSize: 26, margin: "8px 0" }}>本周全部完成！</h2>

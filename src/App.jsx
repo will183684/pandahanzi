@@ -3,9 +3,9 @@ import {
   supabase, getClasses, saveClasses,
   getCurriculum, getClassLessons, getClassCharsBrief, getClassLessonChars,
   startClassLesson, updateClassLesson, completeClassLesson, saveClassLessonChars,
-  getClassProgress, markProgress,
+  getClassProgress, markProgress, getProfiles, saveProfile,
 } from "./supabaseClient";
-import { C, ACTIVITIES } from "./theme";
+import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
 import Panda from "./components/Panda";
 import { Toast, Shell, BigButton } from "./components/ui";
@@ -15,6 +15,7 @@ import StudentHome from "./screens/StudentHome";
 import ReviewHome from "./screens/ReviewHome";
 import ArchivePanel from "./screens/ArchivePanel";
 import LessonPicker from "./screens/LessonPicker";
+import AvatarPicker from "./components/AvatarPicker";
 import TeacherArea, { ghostBtn } from "./screens/TeacherArea";
 
 /* ============================================================
@@ -42,6 +43,7 @@ export default function PandaHanziApp() {
   const [charsBrief, setCharsBrief] = useState([]);   // 本班所有课的字（无录音，列表预览用）
   const [viewChars, setViewChars] = useState([]);     // 当前查看那节课的完整字表（含录音）
   const [progressRows, setProgressRows] = useState([]);
+  const [profiles, setProfiles] = useState({});       // 学生名 -> {avatar}
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [charsTick, setCharsTick] = useState(0);      // 触发重取 viewChars
@@ -50,6 +52,7 @@ export default function PandaHanziApp() {
   const [activeActivity, setActiveActivity] = useState(null);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const [reviewId, setReviewId] = useState(null);     // 回顾中的 class_lesson id
 
   /* ---------------- 课程库：全局加载一次 ---------------- */
@@ -66,10 +69,13 @@ export default function PandaHanziApp() {
     if (!activeClass) return;
     const lessons = await getClassLessons(activeClass.id);
     const ids = lessons.map((l) => l.id);
-    const [brief, prog] = await Promise.all([getClassCharsBrief(ids), getClassProgress(ids)]);
+    const [brief, prog, profs] = await Promise.all([
+      getClassCharsBrief(ids), getClassProgress(ids), getProfiles(activeClass.id),
+    ]);
     setClassLessons(lessons);
     setCharsBrief(brief);
     setProgressRows(prog);
+    setProfiles(profs);
   }, [activeClass]);
 
   useEffect(() => {
@@ -230,6 +236,18 @@ export default function PandaHanziApp() {
     markProgress(viewLessonId, session.name, key).catch(() => pushToast("进度保存失败 ⚠️"));
   }, [reviewing, viewLessonId, session, pushToast]);
 
+  /* ---------------- 学生头像 ---------------- */
+  const myAvatar = (session && session.role === "parent" && session.name
+    && profiles[session.name] && profiles[session.name].avatar) || DEFAULT_AVATAR;
+
+  const chooseAvatar = useCallback((a) => {
+    if (!activeClass || !session || session.role !== "parent" || !session.name) return;
+    const name = session.name;
+    setProfiles((prev) => ({ ...prev, [name]: { ...(prev[name] || {}), avatar: a } }));
+    setAvatarOpen(false);
+    saveProfile(activeClass.id, name, { avatar: a }).catch(() => pushToast("头像保存失败 ⚠️"));
+  }, [activeClass, session, pushToast]);
+
   /* ---------------- 进出班级 ---------------- */
   const enterClass = useCallback((cls, sess) => {
     setLoaded(false);
@@ -323,6 +341,7 @@ export default function PandaHanziApp() {
             chars={viewChars}
             charsFor={charsFor}
             progressRows={progressRows}
+            profiles={profiles}
             busy={busy}
             onOpenPicker={() => setPickerOpen(true)}
             onSaveLesson={saveLesson}
@@ -386,17 +405,21 @@ export default function PandaHanziApp() {
         ) : (
           <StudentHome
             studentName={session.name} meta={viewMeta} progress={viewProgress} readOnly={false}
+            avatar={myAvatar} onChangeAvatar={() => setAvatarOpen(true)}
             onOpenActivity={setActiveActivity} onOpenArchive={() => setArchiveOpen(true)} onLogout={logout}
           />
         )
       ) : (
         <ActivityHost
           activityIndex={activeActivity} meta={viewMeta} readOnly={reviewing}
-          done={!!viewProgress[activeActivity]}
+          done={!!viewProgress[activeActivity]} avatar={myAvatar}
           onComplete={markComplete} onBack={() => setActiveActivity(null)}
         />
       )}
       {archive}
+      {avatarOpen && (
+        <AvatarPicker current={myAvatar} onPick={chooseAvatar} onClose={() => setAvatarOpen(false)} />
+      )}
       <Toast msg={toast} />
     </Shell>
   );

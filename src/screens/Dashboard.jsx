@@ -6,7 +6,7 @@ import { Card } from "../components/ui";
    进度看板 —— 本班当前这节课，每个学生完成了哪些活动。
    数据来自 lesson_progress（每个学生/每节课/每个活动一行）。
    =================================================================== */
-export default function Dashboard({ roster, progressRows, lesson }) {
+export default function Dashboard({ roster, progressRows, lesson, profiles }) {
   const rows = useMemo(
     () => (progressRows || []).filter((r) => lesson && r.class_lesson_id === lesson.id),
     [progressRows, lesson]
@@ -59,7 +59,12 @@ export default function Dashboard({ roster, progressRows, lesson }) {
               const ratio = done / ACTIVITIES.length;
               return (
                 <tr key={nm}>
-                  <td style={{ padding: 8, fontWeight: 700, borderBottom: `1px solid ${C.border}` }}>{nm}</td>
+                  <td style={{ padding: 8, fontWeight: 700, borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap" }}>
+                    <span style={{ fontSize: 20, marginRight: 6 }}>
+                      {(profiles && profiles[nm] && profiles[nm].avatar) || "🐼"}
+                    </span>
+                    {nm}
+                  </td>
                   {ACTIVITIES.map((a) => (
                     <td key={a.key} style={{
                       textAlign: "center", padding: 8, borderBottom: `1px solid ${C.border}`, fontSize: 18,

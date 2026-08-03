@@ -25,6 +25,16 @@ export const DEFAULTS = {
 
 export const ADMIN_CODE = "panda@admin";     // 教务老师口令（可改）
 
+/* 小朋友可选的头像。默认熊猫，跟品牌一致。
+   只存一个 emoji 字符串，不涉及上传真人照片。 */
+export const AVATARS = [
+  "🐼", "🐯", "🦁", "🐻", "🐨", "🦊",
+  "🐰", "🐱", "🐶", "🐭", "🐹", "🐷",
+  "🐮", "🐸", "🐵", "🐔", "🐧", "🦉",
+  "🦄", "🐢", "🐙", "🦋", "🐝", "🐬",
+];
+export const DEFAULT_AVATAR = "🐼";
+
 /* 字库分级：characters.level / lessons.level = 1 | 2 | 3 */
 export const LEVELS = [
   { level: 1, name: "初级", sub: "启蒙级", color: "#E8453C" },

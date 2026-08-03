@@ -16,7 +16,7 @@ export const ghostBtn = {
    =================================================================== */
 export default function TeacherArea({
   role, className, roster, activeClassId,
-  lesson, chars, charsFor, progressRows,
+  lesson, chars, charsFor, progressRows, profiles,
   onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson,
   onOpenArchive, onLogout, onSaveClasses, pushToast, busy,
 }) {
@@ -54,7 +54,7 @@ export default function TeacherArea({
       </div>
 
       {view === "dashboard" && (
-        <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} />
+        <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} profiles={profiles} />
       )}
       {view === "content" && (
         <ContentSettings

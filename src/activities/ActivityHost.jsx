@@ -15,7 +15,7 @@ import SpeedActivity from "./SpeedActivity";
 
    要接入新游戏：在 theme.js 的 ACTIVITIES 里加一条，再在下面加一个分支。
    =================================================================== */
-export default function ActivityHost({ activityIndex, meta, readOnly, done, onComplete, onBack }) {
+export default function ActivityHost({ activityIndex, meta, readOnly, done, avatar, onComplete, onBack }) {
   const [celebrate, setCelebrate] = useState(false);
   /* 每次「再做一遍」就 +1，用作子组件的 key —— 重新挂载即重新出题 */
   const [round, setRound] = useState(0);
@@ -70,7 +70,7 @@ export default function ActivityHost({ activityIndex, meta, readOnly, done, onCo
         <div key={round}>{inner}</div>
       </Card>
       {celebrate && (
-        <CelebrationOverlay text="太棒了！🎉" onReplay={replay} onClose={closeCelebrate} />
+        <CelebrationOverlay text="太棒了！🎉" avatar={avatar} onReplay={replay} onClose={closeCelebrate} />
       )}
     </div>
   );
