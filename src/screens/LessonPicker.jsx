@@ -75,16 +75,20 @@ export default function LessonPicker({ curriculum, classLessons, onPick, onClose
               <button
                 onClick={() => setOpenLevel(openLevel === lv.level ? 0 : lv.level)}
                 style={{
-                  width: "100%", textAlign: "left", minHeight: 56, padding: "10px 14px", borderRadius: 14,
+                  width: "100%", textAlign: "left", minHeight: 56, padding: "10px 12px", borderRadius: 14,
                   border: `2px solid ${isOpen ? lv.color : C.border}`, background: "#fff", cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
+                  display: "flex", alignItems: "center", gap: 10,
                 }}
               >
-                <span>
-                  <span style={{ fontWeight: 800, fontSize: 17 }}>{lv.name}</span>
-                  <span style={{ fontSize: 13, color: "#9C9382", marginLeft: 8 }}>{lv.sub}</span>
+                <span style={{
+                  background: lv.color, color: "#fff", fontWeight: 800, fontSize: 13,
+                  borderRadius: 8, padding: "4px 8px", minWidth: 38, textAlign: "center", flexShrink: 0,
+                }}>{lv.name}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 800, fontSize: 16, display: "block" }}>{lv.sub}</span>
+                  <span style={{ fontSize: 12, color: "#9C9382" }}>{lv.chars} 字 · {total} 课</span>
                 </span>
-                <span style={{ fontSize: 13, color: "#8A8276", fontWeight: 700 }}>
+                <span style={{ fontSize: 13, color: "#8A8276", fontWeight: 700, flexShrink: 0 }}>
                   {doneCount}/{total} 已上　{isOpen ? "▾" : "▸"}
                 </span>
               </button>

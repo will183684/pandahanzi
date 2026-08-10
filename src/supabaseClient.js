@@ -112,8 +112,9 @@ export async function getCurriculum() {
     });
 
   const lessons = lessonRows.map((l) => ({ ...l, chars: charsByLesson.get(l.id) || [] }));
-  const byLevel = { 1: [], 2: [], 3: [] };
-  characters.forEach((c) => { if (byLevel[c.level]) byLevel[c.level].push(c); });
+  /* 按级别分桶。别写死级别数量 —— 分级从 3 级扩到 12 级时这里漏过字。 */
+  const byLevel = {};
+  characters.forEach((c) => { (byLevel[c.level] = byLevel[c.level] || []).push(c); });
 
   curriculumCache = {
     characters,

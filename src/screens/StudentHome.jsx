@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { C, ACTIVITIES } from "../theme";
+import { C, ACTIVITIES, LEVEL_BY_NO } from "../theme";
 import Panda from "../components/Panda";
 import { Confetti, BigButton } from "../components/ui";
 
@@ -16,6 +16,7 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
   }, [allDone, readOnly]);
 
   const messages = ["继续加油，胖胖陪着你！", "你做得真好！", "再来一个就更厉害啦！", "了不起，快完成啦！", "全部完成，太厉害啦！"];
+  const lv = meta.level ? LEVEL_BY_NO[meta.level] : null;
 
   return (
     <div style={{ position: "relative" }}>
@@ -39,10 +40,17 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
         >换个小动物 🔄</button>
         <h1 style={{ margin: "6px 0 0", fontSize: 26 }}>你好，{studentName}！👋</h1>
         <span style={{
-          display: "inline-block", background: "#EAF6EC", color: C.bamboo, fontWeight: 700,
+          display: "inline-flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "center",
+          background: "#EAF6EC", color: C.bamboo, fontWeight: 700,
           borderRadius: 999, padding: "6px 14px", fontSize: 15, border: `1px solid ${C.bamboo}33`,
         }}>
-          {meta.label} · {meta.chars.join("")}
+          {lv && (
+            <span style={{
+              background: lv.color, color: "#fff", fontSize: 12, fontWeight: 800,
+              borderRadius: 6, padding: "2px 7px",
+            }}>{lv.name} {lv.sub}</span>
+          )}
+          <span>{meta.label} · {meta.chars.join("")}</span>
         </span>
       </div>
 

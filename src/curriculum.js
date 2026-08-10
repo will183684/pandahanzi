@@ -27,10 +27,17 @@ export function buildDistractors(chars, classLesson, curriculum, n = 12) {
   return shuffled(pool).slice(0, n);
 }
 
+/* 这节课来自课程库的哪一课（老师自建的课返回 null） */
+export function sourceLesson(classLesson, curriculum) {
+  if (!classLesson || !classLesson.lesson_id || !curriculum) return null;
+  return curriculum.lessonById.get(classLesson.lesson_id) || null;
+}
+
 /* classLesson + chars  ->  meta */
 export function toMeta(classLesson, chars, curriculum) {
   if (!classLesson) return null;
   const list = chars || [];
+  const src = sourceLesson(classLesson, curriculum);
 
   const emojiMap = {};
   const audioMap = {};
@@ -50,6 +57,10 @@ export function toMeta(classLesson, chars, curriculum) {
     emojiMap,
     audioMap,
     distractors: buildDistractors(list, classLesson, curriculum),
+    /* 课程库来源：用来显示「L3 启蒙进阶 · 第2课」。老师自建的课为 null。 */
+    level: src ? src.level : null,
+    levelSeq: src ? src.level_seq : null,
+    lessonNo: src ? src.lesson_no : null,
   };
 }
 

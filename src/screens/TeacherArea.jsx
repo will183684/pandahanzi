@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { C } from "../theme";
+import { C, LEVEL_BY_NO } from "../theme";
 import Dashboard from "./Dashboard";
 import ContentSettings from "./ContentSettings";
 import StudentManager from "./StudentManager";
@@ -16,7 +16,7 @@ export const ghostBtn = {
    =================================================================== */
 export default function TeacherArea({
   role, className, roster, activeClassId,
-  lesson, chars, charsFor, progressRows, profiles,
+  lesson, chars, charsFor, progressRows, profiles, level,
   onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson,
   onOpenArchive, onLogout, onSaveClasses, pushToast, busy,
 }) {
@@ -27,13 +27,20 @@ export default function TeacherArea({
   if (isAdmin) tabs.push({ k: "teachers", t: "🧑‍🏫 老师" });
 
   const charsPreview = (chars || []).map((c) => c.hanzi).join("");
+  const lv = level ? LEVEL_BY_NO[level] : null;
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-        <h1 style={{ fontSize: 24, margin: 0 }}>
-          🏫 {className || "班级"}
-          <span style={{ fontSize: 13, color: "#8A8276", marginLeft: 8, fontWeight: 600 }}>
+        <h1 style={{ fontSize: 24, margin: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span>🏫 {className || "班级"}</span>
+          {lv && (
+            <span style={{
+              background: lv.color, color: "#fff", fontSize: 12, fontWeight: 800,
+              borderRadius: 6, padding: "3px 8px",
+            }}>{lv.name} {lv.sub}</span>
+          )}
+          <span style={{ fontSize: 13, color: "#8A8276", fontWeight: 600 }}>
             {isAdmin ? "教务老师" : "授课老师"}
             {lesson ? ` · ${lesson.title} · ${charsPreview}` : " · 未安排课程"}
           </span>

@@ -342,6 +342,7 @@ export default function PandaHanziApp() {
             charsFor={charsFor}
             progressRows={progressRows}
             profiles={profiles}
+            level={viewMeta ? viewMeta.level : null}
             busy={busy}
             onOpenPicker={() => setPickerOpen(true)}
             onSaveLesson={saveLesson}
