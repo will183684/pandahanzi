@@ -5,6 +5,7 @@ import ContentSettings from "./ContentSettings";
 import StudentManager from "./StudentManager";
 import TeacherManager from "./TeacherManager";
 import ClassManager from "./ClassManager";
+import CurriculumBrowser from "./CurriculumBrowser";
 
 /* Shared ghost-button style, also reused by the review banner in App. */
 export const ghostBtn = {
@@ -17,7 +18,7 @@ export const ghostBtn = {
    =================================================================== */
 export default function TeacherArea({
   role, className, roster, activeClassId,
-  lesson, chars, charsFor, progressRows, profiles, level,
+  lesson, chars, charsFor, progressRows, profiles, level, curriculum, myClassIds,
   onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson,
   onOpenArchive, onLogout, onLeaveClass, onSaveClasses, pushToast, busy,
 }) {
@@ -27,6 +28,7 @@ export default function TeacherArea({
      所以「内容」只给授课老师看。 */
   const tabs = [{ k: "dashboard", t: "📊 进度" }];
   if (!isAdmin) tabs.push({ k: "content", t: "✏️ 内容" });
+  tabs.push({ k: "curriculum", t: "📖 课程库" });   // 教务和老师都能布置课程
   if (isAdmin) {
     tabs.push(
       { k: "classes", t: "🏫 班级" },
@@ -54,9 +56,11 @@ export default function TeacherArea({
             {lesson ? ` · ${lesson.title} · ${charsPreview}` : " · 未安排课程"}
           </span>
         </h1>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button onClick={onOpenArchive} style={ghostBtn}>📚 历史</button>
-          <button onClick={onLogout} style={ghostBtn}>退出</button>
+          {/* 只退出这个班，身份保留 —— 回到选班级那一屏，不用重新输口令 */}
+          <button onClick={onLeaveClass} style={ghostBtn}>← 换班级</button>
+          <button onClick={onLogout} style={{ ...ghostBtn, color: "#9C9382" }}>退出登录</button>
         </div>
       </div>
 
@@ -82,6 +86,14 @@ export default function TeacherArea({
           lesson={lesson} chars={chars} charsFor={charsFor} busy={busy} pushToast={pushToast}
           onOpenPicker={onOpenPicker} onSaveLesson={onSaveLesson}
           onSaveChars={onSaveChars} onCompleteLesson={onCompleteLesson}
+        />
+      )}
+      {view === "curriculum" && (
+        <CurriculumBrowser
+          curriculum={curriculum}
+          myClassIds={isAdmin ? null : myClassIds}
+          activeClassId={activeClassId}
+          pushToast={pushToast}
         />
       )}
       {view === "classes" && isAdmin && (

@@ -3,7 +3,14 @@ import { C, ACTIVITIES } from "../theme";
 /* ===================================================================
    历史记录 —— 本班上过的课，倒序排列，可进入回顾模式重玩。
    =================================================================== */
-export default function ArchivePanel({ lessons, currentId, charsOf, getProgress, onClose, onReview }) {
+export default function ArchivePanel({ lessons, currentId, charsOf, getProgress, onClose, onReview, canDelete, onDelete }) {
+  const remove = (l) => {
+    const warn = `确定删除「${l.title}」这次课吗？\n\n`
+      + `字表和所有学生在这次课的进度都会一起删掉，无法撤销。\n`
+      + `课程库不受影响，以后还能重新选这一课。`;
+    if (window.confirm(warn)) onDelete(l.id);
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.3)" }} />
@@ -48,12 +55,21 @@ export default function ArchivePanel({ lessons, currentId, charsOf, getProgress,
                 {"⭐".repeat(stars)}{"☆".repeat(ACTIVITIES.length - stars)}
               </div>
               <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 4 }}>{charsOf(l.id)}</div>
-              {!isCur && (
-                <button onClick={() => onReview(l.id)} style={{
-                  marginTop: 10, minHeight: 48, padding: "0 16px", borderRadius: 12, border: "none",
-                  background: C.gold, fontWeight: 800, fontSize: 15, cursor: "pointer", color: C.ink,
-                }}>查看回顾 →</button>
-              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                {!isCur && (
+                  <button onClick={() => onReview(l.id)} style={{
+                    minHeight: 48, padding: "0 16px", borderRadius: 12, border: "none",
+                    background: C.gold, fontWeight: 800, fontSize: 15, cursor: "pointer", color: C.ink,
+                  }}>查看回顾 →</button>
+                )}
+                {canDelete && (
+                  <button onClick={() => remove(l)} style={{
+                    minHeight: 48, padding: "0 14px", borderRadius: 12,
+                    border: `2px solid ${C.red}44`, background: "#fff", color: C.red,
+                    fontWeight: 700, fontSize: 14, cursor: "pointer",
+                  }}>删除这次课</button>
+                )}
+              </div>
             </div>
           );
         })}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { C, ADMIN_CODE } from "../theme";
 import { normCode } from "../utils";
 import { getClasses, saveClasses, deleteClassRecords, getTeachers } from "../supabaseClient";
@@ -7,8 +7,11 @@ import { Card, BigButton } from "../components/ui";
 /* ===================================================================
    Landing — 3-tab login: parent / teacher / admin
    =================================================================== */
-export default function Landing({ onEnter, pushToast }) {
-  const [tab, setTab] = useState("parent");
+export default function Landing({ onEnter, pushToast, session }) {
+  /* 从班里「返回班级」回来时 session 还在 —— 直接落到选班级那一屏，
+     不用再输一次口令。 */
+  const restored = session && (session.role === "teacher" || session.role === "admin") ? session : null;
+  const [tab, setTab] = useState(restored ? restored.role : "parent");
   const [childName, setChildName] = useState("");
   const [invite, setInvite] = useState("");
   const [pw, setPw] = useState("");
@@ -16,13 +19,31 @@ export default function Landing({ onEnter, pushToast }) {
   const [busy, setBusy] = useState(false);
 
   // ---- teacher tab state ----
-  const [teacherAuthed, setTeacherAuthed] = useState(false);
-  const [teacherInfo, setTeacherInfo] = useState(null); // {id,name,classIds}
+  const [teacherAuthed, setTeacherAuthed] = useState(restored ? restored.role === "teacher" : false);
+  const [teacherInfo, setTeacherInfo] = useState(
+    restored && restored.role === "teacher" ? { name: restored.name, classIds: restored.classIds || [] } : null
+  );
   const [teacherClasses, setTeacherClasses] = useState([]); // filtered classes
 
   // ---- admin tab state ----
-  const [adminAuthed, setAdminAuthed] = useState(false);
+  const [adminAuthed, setAdminAuthed] = useState(restored ? restored.role === "admin" : false);
   const [allClasses, setAllClasses] = useState([]);
+
+  /* 恢复身份时把班级列表重新拉一遍（可能在班里改过班名/新建过班） */
+  useEffect(() => {
+    if (!restored) return;
+    let alive = true;
+    getClasses().then((list) => {
+      if (!alive) return;
+      if (restored.role === "admin") setAllClasses(list);
+      else {
+        const ids = restored.classIds || [];
+        setTeacherClasses(list.filter((c) => ids.includes(c.id)));
+      }
+    }).catch(() => pushToast("读取班级失败 ⚠️"));
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [newName, setNewName] = useState("");
   const [newInvite, setNewInvite] = useState("");
 
@@ -182,7 +203,9 @@ export default function Landing({ onEnter, pushToast }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {teacherClasses.length === 0 && <span style={{ color: "#9C9382", fontSize: 14 }}>你还没有被分配班级，请联系教务老师。</span>}
               {teacherClasses.map((c) => (
-                <button key={c.id} onClick={() => onEnter(c, { role: "teacher", name: teacherInfo.name })} style={{
+                <button key={c.id} onClick={() => onEnter(c, {
+                  role: "teacher", name: teacherInfo.name, classIds: teacherInfo.classIds || [],
+                })} style={{
                   textAlign: "left", minHeight: 56, padding: "10px 16px", borderRadius: 14,
                   border: `2px solid ${C.border}`, background: "#fff", cursor: "pointer",
                   display: "flex", justifyContent: "space-between", alignItems: "center",

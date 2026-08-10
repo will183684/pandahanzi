@@ -3,7 +3,7 @@ import {
   supabase, getClasses, saveClasses,
   getCurriculum, getClassLessons, getClassCharsBrief, getClassLessonChars,
   startClassLesson, updateClassLesson, completeClassLesson, saveClassLessonChars,
-  getClassProgress, markProgress, getProfiles, saveProfile,
+  getClassProgress, markProgress, getProfiles, saveProfile, deleteClassLesson,
 } from "./supabaseClient";
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
@@ -213,6 +213,13 @@ export default function PandaHanziApp() {
     run(() => saveClassLessonChars(currentLesson.id, rows), null, "字表保存失败 ⚠️");
   }, [currentLesson, run]);
 
+  /* 删掉某一次课（字表和进度靠外键级联）。删的是当前正在上的课时，
+     currentLesson 会自动回退到上一次课。 */
+  const removeLesson = useCallback((id) => {
+    run(() => deleteClassLesson(id), "已删除这次课 🗑️", "删除失败 ⚠️");
+    if (reviewId === id) setReviewId(null);
+  }, [run, reviewId]);
+
   const finishLesson = useCallback(() => {
     if (!currentLesson || currentLesson.status !== "active") return;
     run(
@@ -257,11 +264,23 @@ export default function PandaHanziApp() {
     setReviewId(null); setActiveActivity(null); setArchiveOpen(false); setPickerOpen(false);
   }, []);
 
-  const logout = useCallback(() => {
-    setSession(null); setActiveClass(null); setLoaded(false);
-    setClassLessons([]); setCharsBrief([]); setViewChars([]); setProgressRows([]);
-    setReviewId(null); setActiveActivity(null); setArchiveOpen(false); setPickerOpen(false);
+  /* 清掉班级相关的一切，但可以选择保留登录身份 */
+  const resetClassState = useCallback(() => {
+    setActiveClass(null); setLoaded(false);
+    setClassLessons([]); setCharsBrief([]); setViewChars([]); setProgressRows([]); setProfiles({});
+    setReviewId(null); setActiveActivity(null); setArchiveOpen(false);
+    setPickerOpen(false); setAvatarOpen(false);
   }, []);
+
+  const logout = useCallback(() => {
+    setSession(null);
+    resetClassState();
+  }, [resetClassState]);
+
+  /* 只退出这个班，身份还在 —— 回到「选择班级」那一屏，不用重新输口令 */
+  const leaveClass = useCallback(() => {
+    resetClassState();
+  }, [resetClassState]);
 
   const saveAllClasses = useCallback((nlist) => {
     saveClasses(nlist).catch(() => pushToast("班级保存失败 ⚠️"));
@@ -282,7 +301,7 @@ export default function PandaHanziApp() {
   if (!activeClass) {
     return (
       <Shell>
-        <Landing onEnter={enterClass} pushToast={pushToast} />
+        <Landing onEnter={enterClass} pushToast={pushToast} session={session} />
         <Toast msg={toast} />
       </Shell>
     );
@@ -317,6 +336,7 @@ export default function PandaHanziApp() {
       lessons={lessonsNewestFirst} currentId={currentLesson ? currentLesson.id : null}
       charsOf={charsOf} getProgress={getProgressFor}
       onClose={() => setArchiveOpen(false)} onReview={openReview}
+      canDelete={!!session && session.role !== "parent"} onDelete={removeLesson}
     />
   ) : null;
 
@@ -343,6 +363,8 @@ export default function PandaHanziApp() {
             progressRows={progressRows}
             profiles={profiles}
             level={viewMeta ? viewMeta.level : null}
+            curriculum={curriculum}
+            myClassIds={session.role === "teacher" ? (session.classIds || []) : null}
             busy={busy}
             onOpenPicker={() => setPickerOpen(true)}
             onSaveLesson={saveLesson}
@@ -350,7 +372,7 @@ export default function PandaHanziApp() {
             onCompleteLesson={finishLesson}
             onOpenArchive={() => setArchiveOpen(true)}
             onLogout={logout}
-            onLeaveClass={logout}
+            onLeaveClass={leaveClass}
             onSaveClasses={saveAllClasses}
             pushToast={pushToast}
           />

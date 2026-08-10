@@ -189,6 +189,13 @@ export async function updateClassLesson(id, patch) {
   if (error) throw error;
 }
 
+/* 删掉某个班的某一次课。class_lesson_chars 和 lesson_progress
+   靠外键 on delete cascade 跟着删。 */
+export async function deleteClassLesson(id) {
+  const { error } = await supabase.from("class_lessons").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function completeClassLesson(id) {
   const { error } = await supabase.from("class_lessons")
     .update({ status: "completed", completed_at: new Date().toISOString() })
