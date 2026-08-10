@@ -350,6 +350,7 @@ export default function PandaHanziApp() {
             onCompleteLesson={finishLesson}
             onOpenArchive={() => setArchiveOpen(true)}
             onLogout={logout}
+            onLeaveClass={logout}
             onSaveClasses={saveAllClasses}
             pushToast={pushToast}
           />

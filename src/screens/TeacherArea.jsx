@@ -4,6 +4,7 @@ import Dashboard from "./Dashboard";
 import ContentSettings from "./ContentSettings";
 import StudentManager from "./StudentManager";
 import TeacherManager from "./TeacherManager";
+import ClassManager from "./ClassManager";
 
 /* Shared ghost-button style, also reused by the review banner in App. */
 export const ghostBtn = {
@@ -18,13 +19,21 @@ export default function TeacherArea({
   role, className, roster, activeClassId,
   lesson, chars, charsFor, progressRows, profiles, level,
   onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson,
-  onOpenArchive, onLogout, onSaveClasses, pushToast, busy,
+  onOpenArchive, onLogout, onLeaveClass, onSaveClasses, pushToast, busy,
 }) {
   const [view, setView] = useState("dashboard");
   const isAdmin = role === "admin";
-  const tabs = [{ k: "dashboard", t: "📊 进度" }, { k: "content", t: "✏️ 内容" }];
-  if (isAdmin) tabs.push({ k: "students", t: "👧 学生" });
-  if (isAdmin) tabs.push({ k: "teachers", t: "🧑‍🏫 老师" });
+  /* 教务管班级/老师/学生；备课（选课、改字表）是授课老师的事，
+     所以「内容」只给授课老师看。 */
+  const tabs = [{ k: "dashboard", t: "📊 进度" }];
+  if (!isAdmin) tabs.push({ k: "content", t: "✏️ 内容" });
+  if (isAdmin) {
+    tabs.push(
+      { k: "classes", t: "🏫 班级" },
+      { k: "students", t: "👧 学生" },
+      { k: "teachers", t: "🧑‍🏫 老师" },
+    );
+  }
 
   const charsPreview = (chars || []).map((c) => c.hanzi).join("");
   const lv = level ? LEVEL_BY_NO[level] : null;
@@ -51,11 +60,16 @@ export default function TeacherArea({
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, margin: "14px 0", background: "#F1E9DC", padding: 6, borderRadius: 14 }}>
+      <div style={{
+        display: "flex", gap: 6, margin: "14px 0", background: "#F1E9DC",
+        padding: 6, borderRadius: 14, flexWrap: "wrap",
+      }}>
         {tabs.map((tb) => (
           <button key={tb.k} onClick={() => setView(tb.k)} style={{
-            flex: 1, minHeight: 48, borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 700,
+            flex: "1 1 100px", minHeight: 48, borderRadius: 10, border: "none", cursor: "pointer",
+            fontWeight: 700, fontSize: 15, whiteSpace: "nowrap",
             background: view === tb.k ? "#fff" : "transparent", color: view === tb.k ? C.ink : "#8A8276",
+            boxShadow: view === tb.k ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
           }}>{tb.t}</button>
         ))}
       </div>
@@ -63,11 +77,17 @@ export default function TeacherArea({
       {view === "dashboard" && (
         <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} profiles={profiles} />
       )}
-      {view === "content" && (
+      {view === "content" && !isAdmin && (
         <ContentSettings
           lesson={lesson} chars={chars} charsFor={charsFor} busy={busy} pushToast={pushToast}
           onOpenPicker={onOpenPicker} onSaveLesson={onSaveLesson}
           onSaveChars={onSaveChars} onCompleteLesson={onCompleteLesson}
+        />
+      )}
+      {view === "classes" && isAdmin && (
+        <ClassManager
+          activeClassId={activeClassId} onSaveClasses={onSaveClasses}
+          onLeaveClass={onLeaveClass} pushToast={pushToast}
         />
       )}
       {view === "students" && isAdmin && (
