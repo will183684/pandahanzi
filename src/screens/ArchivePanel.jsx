@@ -1,15 +1,12 @@
+import { useState } from "react";
 import { C, ACTIVITIES } from "../theme";
+import { ConfirmDialog } from "../components/ui";
 
 /* ===================================================================
    历史记录 —— 本班上过的课，倒序排列，可进入回顾模式重玩。
    =================================================================== */
 export default function ArchivePanel({ lessons, currentId, charsOf, getProgress, onClose, onReview, canDelete, onDelete }) {
-  const remove = (l) => {
-    const warn = `确定删除「${l.title}」这次课吗？\n\n`
-      + `字表和所有学生在这次课的进度都会一起删掉，无法撤销。\n`
-      + `课程库不受影响，以后还能重新选这一课。`;
-    if (window.confirm(warn)) onDelete(l.id);
-  };
+  const [pending, setPending] = useState(null);
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", justifyContent: "flex-end" }}>
@@ -63,7 +60,7 @@ export default function ArchivePanel({ lessons, currentId, charsOf, getProgress,
                   }}>查看回顾 →</button>
                 )}
                 {canDelete && (
-                  <button onClick={() => remove(l)} style={{
+                  <button onClick={() => setPending(l)} style={{
                     minHeight: 48, padding: "0 14px", borderRadius: 12,
                     border: `2px solid ${C.red}44`, background: "#fff", color: C.red,
                     fontWeight: 700, fontSize: 14, cursor: "pointer",
@@ -74,6 +71,20 @@ export default function ArchivePanel({ lessons, currentId, charsOf, getProgress,
           );
         })}
       </div>
+
+      {pending && (
+        <ConfirmDialog
+          text={
+            `确定删除「${pending.title}」这次课吗？\n\n`
+            + `字表和所有学生在这次课的进度都会一起删掉，无法撤销。\n`
+            + `课程库不受影响，以后还能重新选这一课。`
+          }
+          confirmLabel="确定删除"
+          cancelLabel="不删了"
+          onCancel={() => setPending(null)}
+          onConfirm={() => { const id = pending.id; setPending(null); onDelete(id); }}
+        />
+      )}
     </div>
   );
 }

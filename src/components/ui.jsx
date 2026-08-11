@@ -141,21 +141,24 @@ export function Card({ children, style }) {
   );
 }
 
-/* ============================ Confirm dialog ============================ */
-export function ConfirmDialog({ text, onCancel, onConfirm }) {
+/* ============================ Confirm dialog ============================
+   自带的确认弹窗，别用原生 window.confirm —— 浏览器在连续弹几次之后会给
+   用户「阻止此页面创建更多对话框」的选项，勾上以后 confirm() 直接返回
+   false，操作静默失效、没有任何提示，看起来就像功能坏了。 */
+export function ConfirmDialog({ text, onCancel, onConfirm, confirmLabel = "确定开始", cancelLabel = "再想想" }) {
   return (
     <div style={{
       position: "fixed", inset: 0, zIndex: 70, background: "rgba(0,0,0,0.4)",
       display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 24, maxWidth: 380, width: "100%" }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 24, maxWidth: 400, width: "100%" }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
-          <Panda sz={80} ex="focused" />
+          <Panda sz={80} />
         </div>
-        <p style={{ fontSize: 17, textAlign: "center", color: C.ink, lineHeight: 1.6 }}>{text}</p>
-        <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-          <BigButton color={C.bamboo} light onClick={onCancel} style={{ flex: 1 }}>再想想</BigButton>
-          <BigButton color={C.red} onClick={onConfirm} style={{ flex: 1 }}>确定开始</BigButton>
+        <p style={{ fontSize: 16, textAlign: "center", color: C.ink, lineHeight: 1.7, whiteSpace: "pre-line" }}>{text}</p>
+        <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+          <BigButton color={C.bamboo} light onClick={onCancel} style={{ flex: "1 1 120px" }}>{cancelLabel}</BigButton>
+          <BigButton color={C.red} onClick={onConfirm} style={{ flex: "1 1 120px" }}>{confirmLabel}</BigButton>
         </div>
       </div>
     </div>

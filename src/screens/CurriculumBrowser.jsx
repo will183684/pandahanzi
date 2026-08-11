@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { C, LEVELS } from "../theme";
 import { getClasses, getClassLessons, startClassLesson, deleteClassLesson } from "../supabaseClient";
-import { Card } from "../components/ui";
+import { Card, ConfirmDialog } from "../components/ui";
 import LessonList from "../components/LessonList";
 
 /* ===================================================================
@@ -68,17 +68,20 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
 
   /* 撤回布置：删掉目标班里这一课最近的那次。
      一课可能被上过多次（「再上一次」），所以按 seq 取最新的一条。 */
-  const unassign = useCallback(async (lesson) => {
+  const [pending, setPending] = useState(null);   // {victim, times}
+
+  const unassign = useCallback((lesson) => {
     const mine = targetLessons
       .filter((cl) => cl.lesson_id === lesson.id)
       .sort((a, b) => b.seq - a.seq);
     if (mine.length === 0) return;
-    const victim = mine[0];
-    const warn = `从「${target ? target.name : ""}」撤回「${victim.title}」？\n\n`
-      + `这次课的字表和学生进度会一起删掉，无法撤销。\n`
-      + (mine.length > 1 ? `这一课被布置过 ${mine.length} 次，只撤回最近的一次。\n` : "")
-      + `课程库不受影响，以后还能重新布置。`;
-    if (!window.confirm(warn)) return;
+    setPending({ victim: mine[0], times: mine.length });
+  }, [targetLessons]);
+
+  const doUnassign = useCallback(async () => {
+    const victim = pending && pending.victim;
+    setPending(null);
+    if (!victim) return;
     setBusy(true);
     try {
       await deleteClassLesson(victim.id);
@@ -88,7 +91,7 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
       pushToast("撤回失败 ⚠️");
     }
     setBusy(false);
-  }, [targetLessons, target, targetId, loadTarget, pushToast]);
+  }, [pending, targetId, loadTarget, pushToast]);
 
   if (!curriculum) return <Card><p style={{ color: "#9C9382" }}>正在加载课程库…</p></Card>;
   if (!classes) return <Card><p style={{ color: "#9C9382" }}>正在加载班级…</p></Card>;
@@ -135,6 +138,21 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
         curriculum={curriculum} taken={taken} busy={busy}
         onPick={assign} pickLabel="布置" onUnpick={unassign}
       />
+
+      {pending && (
+        <ConfirmDialog
+          text={
+            `从「${target ? target.name : ""}」撤回「${pending.victim.title}」？\n\n`
+            + `这次课的字表和学生进度会一起删掉，无法撤销。\n`
+            + (pending.times > 1 ? `这一课布置过 ${pending.times} 次，只撤回最近的一次。\n` : "")
+            + `课程库不受影响，以后还能重新布置。`
+          }
+          confirmLabel="确定撤回"
+          cancelLabel="不撤了"
+          onCancel={() => setPending(null)}
+          onConfirm={doUnassign}
+        />
+      )}
     </Card>
   );
 }

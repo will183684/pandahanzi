@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { C, ADMIN_CODE } from "../theme";
 import { normCode } from "../utils";
 import { getClasses, saveClasses, deleteClassRecords, getTeachers } from "../supabaseClient";
-import { Card, BigButton } from "../components/ui";
+import { Card, BigButton, ConfirmDialog } from "../components/ui";
 
 /* ===================================================================
    Landing — 3-tab login: parent / teacher / admin
@@ -46,6 +46,7 @@ export default function Landing({ onEnter, pushToast, session }) {
   }, []);
   const [newName, setNewName] = useState("");
   const [newInvite, setNewInvite] = useState("");
+  const [pendingClass, setPendingClass] = useState(null);   // 待确认删除的班级
 
   const inputStyle = {
     width: "100%", minHeight: 56, padding: "0 16px", borderRadius: 14, fontSize: 17,
@@ -124,7 +125,7 @@ export default function Landing({ onEnter, pushToast, session }) {
 
   // ---- admin: delete class ----
   const handleDeleteClass = async (cls) => {
-    if (!window.confirm(`确定要删除班级 "${cls.name}" 吗？\n这会删除该班级的所有数据，且无法恢复。`)) return;
+    setPendingClass(null);
     setBusy(true);
     setErr("");
     try {
@@ -244,7 +245,7 @@ export default function Landing({ onEnter, pushToast, session }) {
                       <span style={{ fontWeight: 800, fontSize: 17 }}>{c.name}</span>
                       <span style={{ fontSize: 13, color: "#9C9382" }}>邀请码 {c.invite_code} →</span>
                     </button>
-                    <button onClick={() => handleDeleteClass(c)} disabled={busy} style={{
+                    <button onClick={() => setPendingClass(c)} disabled={busy} style={{
                       padding: "0 16px", borderRadius: 14, border: `2px solid ${C.border}`,
                       background: "#fff", color: C.red, fontWeight: 700, cursor: "pointer",
                       fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center"
@@ -270,6 +271,16 @@ export default function Landing({ onEnter, pushToast, session }) {
 
         {err && <p style={{ color: C.red, fontWeight: 700, marginTop: 12, marginBottom: 0 }}>{err}</p>}
       </Card>
+
+      {pendingClass && (
+        <ConfirmDialog
+          text={`确定删除班级「${pendingClass.name}」吗？\n\n这个班的全部排课、字表、学生进度都会删掉，无法恢复。\n字库和课程库不受影响。`}
+          confirmLabel="确定删除"
+          cancelLabel="不删了"
+          onCancel={() => setPendingClass(null)}
+          onConfirm={() => handleDeleteClass(pendingClass)}
+        />
+      )}
     </div>
   );
 }

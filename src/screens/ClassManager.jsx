@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { C } from "../theme";
 import { normCode } from "../utils";
 import { getClasses, deleteClassRecords } from "../supabaseClient";
-import { Card, BigButton } from "../components/ui";
+import { Card, BigButton, ConfirmDialog } from "../components/ui";
 
 /* ===================================================================
    班级管理（教务）—— 新建 / 删除班级，改班名和家长邀请码。
@@ -47,12 +47,10 @@ export default function ClassManager({ activeClassId, onSaveClasses, onLeaveClas
     pushToast(`已新建「${nm}」🏫`);
   };
 
+  const [pending, setPending] = useState(null);
+
   const remove = async (cls) => {
-    const n = (cls.students || []).length;
-    const warn = `确定删除班级「${cls.name}」吗？\n\n`
-      + `会一并删除：这个班的全部排课、字表、学生进度记录${n ? `（名单里还有 ${n} 个学生）` : ""}。\n`
-      + `字库和课程库不受影响。此操作无法撤销。`;
-    if (!window.confirm(warn)) return;
+    setPending(null);
     setBusy(true);
     try {
       commit(list.filter((c) => c.id !== cls.id));
@@ -110,7 +108,7 @@ export default function ClassManager({ activeClassId, onSaveClasses, onLeaveClas
                 />
                 <span style={{ fontSize: 13, color: "#9C9382" }}>· {(c.students || []).length} 个学生</span>
                 <button
-                  onClick={() => remove(c)}
+                  onClick={() => setPending(c)}
                   disabled={busy}
                   style={{
                     marginLeft: "auto", minHeight: 44, padding: "0 14px", borderRadius: 10,
@@ -144,6 +142,21 @@ export default function ClassManager({ activeClassId, onSaveClasses, onLeaveClas
           </BigButton>
         </div>
       </div>
+
+      {pending && (
+        <ConfirmDialog
+          text={
+            `确定删除班级「${pending.name}」吗？\n\n`
+            + `会一并删除这个班的全部排课、字表、学生进度记录`
+            + ((pending.students || []).length ? `（名单里还有 ${pending.students.length} 个学生）` : "")
+            + `。\n字库和课程库不受影响。此操作无法撤销。`
+          }
+          confirmLabel="确定删除"
+          cancelLabel="不删了"
+          onCancel={() => setPending(null)}
+          onConfirm={() => remove(pending)}
+        />
+      )}
     </Card>
   );
 }

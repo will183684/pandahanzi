@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { C } from "../theme";
 import { getClasses, getTeachers, saveTeachers } from "../supabaseClient";
-import { Card } from "../components/ui";
+import { Card, ConfirmDialog } from "../components/ui";
 
 /* ===================================================================
    Teacher Manager (教务老师) — add / delete teachers, assign classes
@@ -46,11 +46,11 @@ export default function TeacherManager({ pushToast }) {
     pushToast(`已添加老师：${nm} ✅`);
   };
 
-  const removeTeacher = (tid) => {
-    const t = teachers.find((x) => x.id === tid);
-    if (!t) return;
-    if (!window.confirm(`确定要删除老师 "${t.name}" 吗？`)) return;
-    commit(teachers.filter((x) => x.id !== tid));
+  const [pendingTeacher, setPendingTeacher] = useState(null);
+
+  const removeTeacher = (t) => {
+    setPendingTeacher(null);
+    commit(teachers.filter((x) => x.id !== t.id));
     pushToast(`已删除老师：${t.name}`);
   };
 
@@ -110,7 +110,7 @@ export default function TeacherManager({ pushToast }) {
                   value={t.passcode}
                   onChange={(ev) => updatePasscode(t.id, ev.target.value)}
                 />
-                <button onClick={() => removeTeacher(t.id)} style={{
+                <button onClick={() => setPendingTeacher(t)} style={{
                   minHeight: 36, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.border}`,
                   background: "#fff", color: C.red, fontWeight: 700, cursor: "pointer", fontSize: 13,
                 }}>删除</button>
@@ -139,6 +139,16 @@ export default function TeacherManager({ pushToast }) {
           </div>
         ))}
       </div>
+
+      {pendingTeacher && (
+        <ConfirmDialog
+          text={`确定删除老师「${pendingTeacher.name}」吗？\n\n他将无法再用自己的口令登录。班级和学生数据不受影响。`}
+          confirmLabel="确定删除"
+          cancelLabel="不删了"
+          onCancel={() => setPendingTeacher(null)}
+          onConfirm={() => removeTeacher(pendingTeacher)}
+        />
+      )}
     </Card>
   );
 }
