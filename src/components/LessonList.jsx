@@ -8,7 +8,7 @@ import { C, LEVELS } from "../theme";
      · LessonPicker    弹窗，给当前所在的班选课
      · CurriculumBrowser  独立页签，浏览全部字表并布置给任意班级
    =================================================================== */
-export default function LessonList({ curriculum, taken, busy, onPick, pickLabel }) {
+export default function LessonList({ curriculum, taken, busy, onPick, pickLabel, onUnpick }) {
   const [openLevel, setOpenLevel] = useState(1);
   const [query, setQuery] = useState("");
 
@@ -83,27 +83,38 @@ export default function LessonList({ curriculum, taken, busy, onPick, pickLabel 
                       <span style={{ flex: 1, minWidth: 140, fontSize: 22, fontWeight: 800, letterSpacing: 3 }}>
                         {l.chars.map((c) => c.hanzi).join("")}
                       </span>
-                      {isActive ? (
+                      {isActive && (
                         <span style={{ fontSize: 13, color: C.bamboo, fontWeight: 800 }}>🔵 正在上</span>
-                      ) : (
-                        <>
-                          {isDone && (
-                            <span style={{ fontSize: 13, color: "#B79A2E", fontWeight: 700 }}>
-                              ✅{st.done > 1 ? `×${st.done}` : ""}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => onPick(l)}
-                            disabled={busy}
-                            style={{
-                              minHeight: 40, padding: "0 12px", borderRadius: 10, border: "none",
-                              background: busy ? "#D8D2C6" : C.bamboo, color: "#fff",
-                              fontWeight: 800, fontSize: 14, cursor: busy ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            {isDone ? "再上一次" : (pickLabel || "选用")}
-                          </button>
-                        </>
+                      )}
+                      {!isActive && isDone && (
+                        <span style={{ fontSize: 13, color: "#B79A2E", fontWeight: 700 }}>
+                          ✅{st.done > 1 ? `×${st.done}` : ""}
+                        </span>
+                      )}
+                      {/* 布置过的（正在上或已上）可以撤回，给老师反悔的机会 */}
+                      {onUnpick && (isActive || isDone) && (
+                        <button
+                          onClick={() => onUnpick(l, st)}
+                          disabled={busy}
+                          style={{
+                            minHeight: 40, padding: "0 10px", borderRadius: 10,
+                            border: `2px solid ${C.red}44`, background: "#fff", color: C.red,
+                            fontWeight: 700, fontSize: 13, cursor: busy ? "not-allowed" : "pointer",
+                          }}
+                        >取消布置</button>
+                      )}
+                      {!isActive && (
+                        <button
+                          onClick={() => onPick(l)}
+                          disabled={busy}
+                          style={{
+                            minHeight: 40, padding: "0 12px", borderRadius: 10, border: "none",
+                            background: busy ? "#D8D2C6" : C.bamboo, color: "#fff",
+                            fontWeight: 800, fontSize: 14, cursor: busy ? "not-allowed" : "pointer",
+                          }}
+                        >
+                          {isDone ? "再上一次" : (pickLabel || "选用")}
+                        </button>
                       )}
                     </div>
                   );
