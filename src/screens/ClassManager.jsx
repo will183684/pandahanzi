@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { C } from "../theme";
 import { normCode } from "../utils";
 import { getClasses, deleteClassRecords } from "../supabaseClient";
@@ -26,7 +26,25 @@ export default function ClassManager({ activeClassId, onSaveClasses, onLeaveClas
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const commit = (nlist) => { setList(nlist); onSaveClasses(nlist); };
+  /* 改班名/邀请码是逐字输入的，不能每敲一下就写一次库 —— 攒 600ms 再存。
+     离开页面时把还没落地的改动补写掉，免得最后几个字丢了。 */
+  const unsaved = useRef(null);
+  const timer = useRef(null);
+
+  const flush = useCallback(() => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    if (unsaved.current) { onSaveClasses(unsaved.current); unsaved.current = null; }
+  }, [onSaveClasses]);
+
+  const commit = useCallback((nlist, immediate = false) => {
+    setList(nlist);
+    if (timer.current) clearTimeout(timer.current);
+    if (immediate) { unsaved.current = null; onSaveClasses(nlist); return; }
+    unsaved.current = nlist;
+    timer.current = setTimeout(flush, 600);
+  }, [onSaveClasses, flush]);
+
+  useEffect(() => flush, [flush]);
 
   const patch = (id, key, value) => commit(list.map((c) => (c.id === id ? { ...c, [key]: value } : c)));
 
@@ -42,7 +60,7 @@ export default function ClassManager({ activeClassId, onSaveClasses, onLeaveClas
       id: "cls_" + Math.random().toString(36).slice(2, 9),
       name: nm, invite_code: code, students: [],
     };
-    commit([...list, cls]);
+    commit([...list, cls], true);
     setNewName(""); setNewCode("");
     pushToast(`已新建「${nm}」🏫`);
   };
@@ -53,7 +71,7 @@ export default function ClassManager({ activeClassId, onSaveClasses, onLeaveClas
     setPending(null);
     setBusy(true);
     try {
-      commit(list.filter((c) => c.id !== cls.id));
+      commit(list.filter((c) => c.id !== cls.id), true);
       await deleteClassRecords(cls.id);
       pushToast(`「${cls.name}」已删除 🗑️`);
       if (cls.id === activeClassId && onLeaveClass) onLeaveClass();

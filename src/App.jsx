@@ -64,22 +64,28 @@ export default function PandaHanziApp() {
     return () => { alive = false; };
   }, [pushToast]);
 
-  /* ---------------- 本班数据 ---------------- */
+  /* ---------------- 本班数据 ----------------
+     下面的加载/订阅只认班级 id，不认 activeClass 这个对象。
+     改班名会 setActiveClass 出一个新对象，如果 effect 依赖整个对象，
+     每敲一个字都会重新加载一次 —— 界面闪回「正在加载」、tab 被重置，
+     表现就是班名根本改不动。 */
+  const activeClassId = activeClass ? activeClass.id : null;
+
   const reload = useCallback(async () => {
-    if (!activeClass) return;
-    const lessons = await getClassLessons(activeClass.id);
+    if (!activeClassId) return;
+    const lessons = await getClassLessons(activeClassId);
     const ids = lessons.map((l) => l.id);
     const [brief, prog, profs] = await Promise.all([
-      getClassCharsBrief(ids), getClassProgress(ids), getProfiles(activeClass.id),
+      getClassCharsBrief(ids), getClassProgress(ids), getProfiles(activeClassId),
     ]);
     setClassLessons(lessons);
     setCharsBrief(brief);
     setProgressRows(prog);
     setProfiles(profs);
-  }, [activeClass]);
+  }, [activeClassId]);
 
   useEffect(() => {
-    if (!activeClass) return undefined;
+    if (!activeClassId) return undefined;
     let alive = true;
     setLoaded(false);
     reload()
@@ -90,11 +96,11 @@ export default function PandaHanziApp() {
         setLoaded(true);
       });
     return () => { alive = false; };
-  }, [activeClass, reload, pushToast]);
+  }, [activeClassId, reload, pushToast]);
 
   /* ---------------- realtime ---------------- */
   useEffect(() => {
-    if (!activeClass) return undefined;
+    if (!activeClassId) return undefined;
     let alive = true;
     let timer = null;
     const refetch = () => {
@@ -108,14 +114,14 @@ export default function PandaHanziApp() {
     // class_lesson_chars / lesson_progress 没有 class_id 列，没法按班过滤，
     // 收到任何变更都重取一次；数据量小，代价可以忽略。
     const channel = supabase
-      .channel("v2-sync-" + activeClass.id)
+      .channel("v2-sync-" + activeClassId)
       .on("postgres_changes",
-        { event: "*", schema: "public", table: "class_lessons", filter: `class_id=eq.${activeClass.id}` }, refetch)
+        { event: "*", schema: "public", table: "class_lessons", filter: `class_id=eq.${activeClassId}` }, refetch)
       .on("postgres_changes", { event: "*", schema: "public", table: "class_lesson_chars" }, refetch)
       .on("postgres_changes", { event: "*", schema: "public", table: "lesson_progress" }, refetch)
       .subscribe();
     return () => { alive = false; if (timer) clearTimeout(timer); supabase.removeChannel(channel); };
-  }, [activeClass, reload]);
+  }, [activeClassId, reload]);
 
   /* ---------------- 派生 ---------------- */
   /* 当前这节课：优先「正在上」的那节；老师点过「完成本课」之后就没有 active 了，
