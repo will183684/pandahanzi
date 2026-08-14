@@ -11,8 +11,17 @@ let cachedVoice = null;
    之前用 voices.find() 取第一个匹配，正好选中 Eddy，所以特别难听。 */
 const NOVELTY = /^(Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley|Bells|Boing|Bubbles|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Albert|Bahh|Bad News|Good News)/i;
 
-/* 按好听程度排的普通话音色。Tingting 是苹果的标准普通话女声。 */
-const PREFERRED = ["tingting", "ting-ting", "婷婷", "limu", "li-mu", "yushu", "yu-shu", "meijia"];
+/* 已知的男声，念给幼儿听不如女声合适，排在最后 */
+const MALE = /^(li-?mu|liang|yu-?shu|reed|eddy|rocko|grandpa|han|kangkang|yunyang|yunxi)/i;
+
+/* 按好听程度排的普通话女声，覆盖 苹果 / Chrome / Edge 三套引擎。
+   注意排序即优先级 —— 之前只用 find() 取第一个匹配，撞上了角色音 Eddy。 */
+const PREFERRED = [
+  "tingting", "ting-ting", "婷婷",          // 苹果标准普通话女声
+  "meijia", "mei-jia",                      // 苹果（台湾腔）
+  "google普通话", "google国语", "google中文",  // Chrome
+  "huihui", "xiaoxiao", "yaoyao", "xiaoyi",  // Edge / Windows
+];
 
 const norm = (s) => s.replace(/[-\s_]/g, "").toLowerCase();
 
@@ -31,17 +40,28 @@ function pickVoice() {
     const hit = zhCN.find((v) => norm(v.name).startsWith(want)) || zhAny.find((v) => norm(v.name).startsWith(want));
     if (hit) { cachedVoice = hit; return hit; }
   }
-  // 2) 普通话里非角色音的
-  const plain = zhCN.find((v) => !NOVELTY.test(v.name));
-  if (plain) { cachedVoice = plain; return plain; }
+  // 2) 普通话里非角色音的，女声优先
+  const plain = zhCN.filter((v) => !NOVELTY.test(v.name));
+  const female = plain.find((v) => !MALE.test(norm(v.name)));
+  if (female) { cachedVoice = female; return female; }
+  if (plain.length) { cachedVoice = plain[0]; return plain[0]; }
   // 3) 任意中文，实在没有就系统默认
   cachedVoice = zhCN[0] || zhAny[0] || null;
   return cachedVoice;
 }
 
-/* 语音表是异步加载的，变了就重挑一次 */
+/* 语音表是异步加载的。第一次 getVoices() 常常返回空数组，这时候如果
+   直接发音就不会设 voice，退回系统默认（往往是男声）——所以模块一加载
+   就先预热，并在语音表就绪时重挑一次。 */
 if (typeof window !== "undefined" && window.speechSynthesis) {
+  pickVoice();
   window.speechSynthesis.onvoiceschanged = () => { cachedVoice = null; pickVoice(); };
+  // 有些浏览器不触发 onvoiceschanged，兜底再试几次
+  let tries = 0;
+  const warm = setInterval(() => {
+    if (cachedVoice || ++tries > 10) { clearInterval(warm); return; }
+    pickVoice();
+  }, 300);
 }
 
 /* 调试用：看当前选中的是哪个音色 */
@@ -60,9 +80,9 @@ function ensureKeepAlive() {
   }, 8000);
 }
 
-/* 浏览器朗读。单个汉字本来就一闪而过，所以放慢并读两遍，
-   中间用顿号断出停顿，方便孩子跟读。返回 false 表示这个环境放不出声。 */
-export function speak(text, { rate = 0.55, times = 2 } = {}) {
+/* 浏览器朗读。单个汉字本来就一闪而过，所以放得很慢，读一遍。
+   返回 false 表示这个环境放不出声。 */
+export function speak(text, { rate = 0.4, times = 1 } = {}) {
   try {
     const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
     if (!synth) return false;
