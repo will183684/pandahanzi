@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { levelOfCharSeq, levelOfLesson } from "./theme";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -93,11 +94,20 @@ let curriculumCache = null;
 
 export async function getCurriculum() {
   if (curriculumCache) return curriculumCache;
-  const [characters, lessonRows, lessonChars] = await Promise.all([
+  const [charRows, lessonRowsRaw, lessonChars] = await Promise.all([
     fetchAllRows("characters", "id,hanzi,level,global_seq,pinyin,emoji", "global_seq"),
     fetchAllRows("lessons", "id,lesson_no,level,level_seq,title,vocab,sentence", "lesson_no"),
     fetchAllRows("lesson_chars", "lesson_id,char_id,pos", "lesson_id"),
   ]);
+
+  /* 级别在前端按 global_seq / lesson_no 算，盖掉库里的 level 列 —— 那列
+     还是旧的 3 级，改它需要 DDL 和字库写权限，anon key 都没有。
+     详见 theme.js 里 LEVEL_RANGES 的说明。 */
+  const characters = charRows.map((c) => ({ ...c, level: levelOfCharSeq(c.global_seq) }));
+  const lessonRows = lessonRowsRaw.map((l) => {
+    const { level, levelSeq } = levelOfLesson(l.lesson_no);
+    return { ...l, level, level_seq: levelSeq };
+  });
 
   const charById = new Map(characters.map((c) => [c.id, c]));
   const charsByLesson = new Map();
