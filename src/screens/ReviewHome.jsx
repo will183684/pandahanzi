@@ -5,11 +5,11 @@ import { BigButton } from "../components/ui";
 /* ===================================================================
    Review Home (read-only week — shows the activities to replay)
    =================================================================== */
-export default function ReviewHome({ meta, onOpenActivity, onExit }) {
+export default function ReviewHome({ meta, avatar, onOpenActivity, onExit }) {
   return (
     <div>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, textAlign: "center" }}>
-        <Panda sz={100} ex="focused" />
+        <Panda sz={100} avatar={avatar} />
         <h1 style={{ fontSize: 24, margin: "6px 0 0" }}>{meta.label} 回顾</h1>
         <span style={{
           display: "inline-block", background: "#FBEFCB", color: "#8a6d12", fontWeight: 700,

@@ -413,7 +413,7 @@ export default function PandaHanziApp() {
     return (
       <Shell banner={reviewBanner}>
         <div style={{ textAlign: "center", padding: "40px 16px" }}>
-          <Panda sz={130} ex="curious" />
+          <Panda sz={130} avatar={myAvatar} />
           <h2 style={{ fontSize: 22, marginBottom: 6 }}>老师还没安排本周内容</h2>
           <p style={{ color: "#8A8276" }}>过一会儿再来看看吧 🐼</p>
           <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
@@ -431,7 +431,8 @@ export default function PandaHanziApp() {
     <Shell banner={reviewBanner}>
       {activeActivity == null ? (
         reviewing ? (
-          <ReviewHome meta={viewMeta} onOpenActivity={setActiveActivity} onExit={exitReview} />
+          /* 回顾模式也用孩子自己的头像；老师端那个 ReviewHome 不传，保持品牌熊猫 */
+          <ReviewHome meta={viewMeta} avatar={myAvatar} onOpenActivity={setActiveActivity} onExit={exitReview} />
         ) : (
           <StudentHome
             studentName={session.name} meta={viewMeta} progress={viewProgress} readOnly={false}
