@@ -80,9 +80,10 @@ function ensureKeepAlive() {
   }, 8000);
 }
 
-/* 浏览器朗读。单个汉字本来就一闪而过，所以放得很慢，读一遍。
+/* 浏览器朗读。听众是五六岁的孩子，单个汉字又一闪而过，所以放得很慢。
+   0.3 是试出来的下限 —— 再低苹果的引擎会把单音节拉长到发飘。
    返回 false 表示这个环境放不出声。 */
-export function speak(text, { rate = 0.4, times = 1 } = {}) {
+export function speak(text, { rate = 0.3, times = 1 } = {}) {
   try {
     const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
     if (!synth) return false;
