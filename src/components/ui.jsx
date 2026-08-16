@@ -1,6 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { C } from "../theme";
 import Panda from "./Panda";
+import { speak, stopAudio } from "../audio";
 
 /* ============================ Confetti ============================ */
 export function Confetti({ count = 80 }) {
@@ -46,6 +47,15 @@ export function Confetti({ count = 80 }) {
    做完一个活动后弹出。给出「再做一遍」和「回去」两个明确出口，
    不再用「轻触任意处」——免得孩子想重玩却被误关掉。 */
 export function CelebrationOverlay({ text, avatar, onReplay, onClose }) {
+  /* 弹出时念一句夸奖。取 text 里的汉字（「太棒了！🎉」-> 「太棒了」），
+     语速比念单字快一些 —— 这是整句，不需要那么慢。
+     关掉时收声，免得孩子已经点走了还在响。 */
+  useEffect(() => {
+    const say = String(text || "").replace(/[^一-鿿]/g, "");
+    if (say) speak(say, { rate: 0.75 });
+    return stopAudio;
+  }, [text]);
+
   return (
     <div
       style={{

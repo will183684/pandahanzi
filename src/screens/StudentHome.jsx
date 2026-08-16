@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { C, ACTIVITIES, LEVEL_BY_NO } from "../theme";
 import Panda from "../components/Panda";
 import { Confetti, BigButton } from "../components/ui";
+import { speak, stopAudio } from "../audio";
 
 /* ===================================================================
    Student Home
@@ -14,6 +15,13 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
   useEffect(() => {
     if (allDone && !readOnly) setShowFinale(true);
   }, [allDone, readOnly]);
+
+  /* 本周全部做完时也念一句 */
+  useEffect(() => {
+    if (!showFinale) return undefined;
+    speak("本周全部完成，你真棒", { rate: 0.8 });
+    return stopAudio;
+  }, [showFinale]);
 
   const messages = ["继续加油，胖胖陪着你！", "你做得真好！", "再来一个就更厉害啦！", "了不起，快完成啦！", "全部完成，太厉害啦！"];
   const lv = meta.level ? LEVEL_BY_NO[meta.level] : null;
