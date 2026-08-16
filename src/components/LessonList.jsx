@@ -77,8 +77,9 @@ export default function LessonList({ curriculum, taken, busy, onPick, pickLabel,
                       border: `2px solid ${isActive ? C.bamboo : isDone ? C.gold + "66" : C.border}`,
                       flexWrap: "wrap",
                     }}>
-                      <span style={{ fontSize: 13, color: "#9C9382", fontWeight: 700, minWidth: 52 }}>
-                        第{l.level_seq}课
+                      <span style={{ fontSize: 13, fontWeight: 700, minWidth: 74, whiteSpace: "nowrap" }}>
+                        <span style={{ color: lv.color }}>{lv.name}</span>
+                        <span style={{ color: "#9C9382" }}> 第{l.level_seq}课</span>
                       </span>
                       <span style={{ flex: 1, minWidth: 140, fontSize: 22, fontWeight: 800, letterSpacing: 3 }}>
                         {l.chars.map((c) => c.hanzi).join("")}

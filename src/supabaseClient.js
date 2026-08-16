@@ -177,7 +177,9 @@ export async function startClassLesson(classId, lesson, existingLessons) {
     class_id: classId,
     lesson_id: lesson.id,
     seq,
-    title: lesson.title || `第${lesson.lesson_no}课`,
+    /* 带上级别 —— 选课面板里按级内序号显示（L10 下面就是「第1课」），
+       如果这里只存全局课号，历史里会冒出「第91课」，对不上。 */
+    title: lesson.title || `L${lesson.level} 第${lesson.level_seq}课`,
     vocab: lesson.vocab || [],
     sentence: lesson.sentence || "",
     status: "active",
