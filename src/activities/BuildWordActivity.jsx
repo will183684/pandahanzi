@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { C } from "../theme";
 import { shuffled } from "../utils";
 import { BigButton } from "../components/ui";
+import { playChar, speak, stopAudio } from "../audio";
 
 /* ===================================================================
    拼词语 (Build the week's vocab words) — alternate game, not currently
@@ -38,6 +39,9 @@ export default function BuildWordActivity({ meta, onDone }) {
       });
       if (ok) {
         setOkFlash(true);
+        /* 拼对了念整词，把字音连起来听。等一下再念 —— 刚点下最后一个字
+           时那个字的音还在放，speak 会把它掐掉。 */
+        setTimeout(() => speak(word, { rate: 0.6 }), 420);
         setTimeout(() => {
           setOkFlash(false);
           if (wi + 1 >= words.length) onDone();
@@ -49,9 +53,19 @@ export default function BuildWordActivity({ meta, onDone }) {
       }
       return cur;
     });
-  }, [targetChars, wi, words.length, onDone, buildTiles]);
+  }, [targetChars, word, wi, words.length, onDone, buildTiles]);
+
+  /* 换到下一个词时先念一遍，孩子知道自己在拼什么 */
+  useEffect(() => {
+    if (word) speak(word, { rate: 0.6 });
+    return stopAudio;
+  }, [word]);
 
   const place = useCallback((tileId) => {
+    /* 点一个字就念这个字：拼的过程本身就是在认字音。
+       有老师录音优先放录音，跟「认一认」一致。 */
+    const tl = tiles.find((t) => t.id === tileId);
+    if (tl) playChar(tl.ch, meta.audioMap);
     setSlots((prev) => {
       const firstEmpty = prev.indexOf(null);
       if (firstEmpty === -1) return prev;
@@ -61,18 +75,20 @@ export default function BuildWordActivity({ meta, onDone }) {
       if (!ns.includes(null)) setTimeout(() => check(ns), 180);
       return ns;
     });
-  }, [check]);
+  }, [check, tiles, meta.audioMap]);
 
   const returnTile = useCallback((slotIndex) => {
     setSlots((prev) => {
       const tid = prev[slotIndex];
       if (!tid) return prev;
+      const back = tiles.find((t) => t.id === tid);
+      if (back) playChar(back.ch, meta.audioMap);
       const ns = prev.slice();
       ns[slotIndex] = null;
       setTiles((pt) => pt.map((t) => (t.id === tid ? { ...t, placed: null } : t)));
       return ns;
     });
-  }, []);
+  }, [tiles, meta.audioMap]);
 
   if (words.length === 0) {
     return <p style={{ color: "#9C9382", textAlign: "center" }}>老师还没设置“词汇”，先去内容设置里填几个词语吧（例如 山水、火山）。</p>;
@@ -81,8 +97,16 @@ export default function BuildWordActivity({ meta, onDone }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
       <p style={{ fontSize: 16, color: "#6B6356" }}>看上面的词，把字按顺序拼出来</p>
-      <div style={{ fontSize: 20, fontWeight: 800 }}>
-        拼出：<span style={{ color: C.bamboo, fontSize: 30 }}>{word}</span>
+      <div style={{ fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", gap: 10 }}>
+        <span>拼出：<span style={{ color: C.bamboo, fontSize: 30 }}>{word}</span></span>
+        <button
+          onClick={() => speak(word, { rate: 0.6 })}
+          title="再听一遍"
+          style={{
+            minHeight: 44, minWidth: 44, borderRadius: 12, border: `2px solid ${C.bamboo}`,
+            background: "#fff", fontSize: 22, cursor: "pointer", lineHeight: 1,
+          }}
+        >🔊</button>
       </div>
 
       {/* slots */}
