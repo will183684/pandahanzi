@@ -24,6 +24,26 @@ import TeacherArea, { ghostBtn } from "./screens/TeacherArea";
    登录页 / 学生页 / 老师页之间路由。
    课程库（1200 字 / 240 课）是全局只读数据，进程内缓存一次。
    ============================================================ */
+/* 一条完成记录的身份：同一节课 + 同一个孩子 + 同一个活动 */
+const rowTag = (r) => r.class_lesson_id + "|" + r.student_name + "|" + r.activity_key;
+const sameRow = (a) => (b) => rowTag(a) === rowTag(b);
+
+/* 重取回来的数据里补上还没被服务器确认的那几条，否则刚点亮的星星会被抹掉 */
+function withPending(rows, pending) {
+  if (!pending.size) return rows;
+  const have = new Set(rows.map(rowTag));
+  const extra = [];
+  pending.forEach((tag) => {
+    if (have.has(tag)) return;
+    const [lessonId, name, key] = tag.split("|");
+    extra.push({
+      class_lesson_id: Number(lessonId), student_name: name, activity_key: key,
+      completed_at: new Date().toISOString(),
+    });
+  });
+  return extra.length ? [...rows, ...extra] : rows;
+}
+
 export default function PandaHanziApp() {
   const [toast, setToast] = useState("");
   const toastTimer = useRef(null);
@@ -71,6 +91,10 @@ export default function PandaHanziApp() {
      表现就是班名根本改不动。 */
   const activeClassId = activeClass ? activeClass.id : null;
 
+  /* 已经点亮、但服务器还没确认的完成记录（"课id|名字|活动"）。
+     重取整表时要把它们保住，详见 markComplete。 */
+  const pendingRef = useRef(new Set());
+
   const reload = useCallback(async () => {
     if (!activeClassId) return;
     const lessons = await getClassLessons(activeClassId);
@@ -80,7 +104,7 @@ export default function PandaHanziApp() {
     ]);
     setClassLessons(lessons);
     setCharsBrief(brief);
-    setProgressRows(prog);
+    setProgressRows(withPending(prog, pendingRef.current));
     setProfiles(profs);
   }, [activeClassId]);
 
@@ -236,18 +260,33 @@ export default function PandaHanziApp() {
   }, [currentLesson, run]);
 
   /* ---------------- 学生完成一个活动 ---------------- */
+  /* 孩子在「历史回顾」里重做旧课也算数 —— 记在那节课名下。
+     以前这里直接 return，孩子照样看到「太棒了」，但什么都没存下来，
+     看上去就像系统漏记了。老师端的回顾仍然是只读的（他们不是学生）。 */
   const markComplete = useCallback((activityIndex) => {
-    if (reviewing || !viewLessonId) return;
+    if (!viewLessonId) return;
     if (!session || session.role !== "parent" || !session.name) return;
     const key = ACTIVITIES[activityIndex].key;
-    // 先本地生效，realtime 回来时会被真实数据覆盖
-    setProgressRows((prev) =>
-      prev.some((r) => r.class_lesson_id === viewLessonId && r.student_name === session.name && r.activity_key === key)
-        ? prev
-        : [...prev, { class_lesson_id: viewLessonId, student_name: session.name, activity_key: key, completed_at: new Date().toISOString() }]
-    );
-    markProgress(viewLessonId, session.name, key).catch(() => pushToast("进度保存失败 ⚠️"));
-  }, [reviewing, viewLessonId, session, pushToast]);
+    const name = session.name;
+    const lessonId = viewLessonId;
+    const row = { class_lesson_id: lessonId, student_name: name, activity_key: key, completed_at: new Date().toISOString() };
+    const tag = lessonId + "|" + name + "|" + key;
+
+    /* 先本地点亮星星，同时把这条记进 pendingRef。
+       realtime 一有风吹草动就整表重取，重取的 SELECT 可能跑在我们这条
+       INSERT 落库之前 —— 不挂起来的话星星会被刚取回的旧数据抹掉。 */
+    pendingRef.current.add(tag);
+    setProgressRows((prev) => (prev.some(sameRow(row)) ? prev : [...prev, row]));
+
+    markProgress(lessonId, name, key)
+      .then(() => { pendingRef.current.delete(tag); })
+      .catch(() => {
+        // 存不上就把星星收回去，别让孩子以为记下了
+        pendingRef.current.delete(tag);
+        setProgressRows((prev) => prev.filter((r) => !sameRow(row)(r)));
+        pushToast("进度没存上，请检查网络后再做一遍 ⚠️");
+      });
+  }, [viewLessonId, session, pushToast]);
 
   /* ---------------- 学生头像 ---------------- */
   const myAvatar = (session && session.role === "parent" && session.name
@@ -442,7 +481,8 @@ export default function PandaHanziApp() {
         )
       ) : (
         <ActivityHost
-          activityIndex={activeActivity} meta={viewMeta} readOnly={reviewing}
+          /* 学生自己重做旧课也计入那节课，所以这里不是只读 */
+          activityIndex={activeActivity} meta={viewMeta} readOnly={false}
           done={!!viewProgress[activeActivity]} avatar={myAvatar}
           onComplete={markComplete} onBack={() => setActiveActivity(null)}
         />
