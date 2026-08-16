@@ -80,10 +80,13 @@ function ensureKeepAlive() {
   }, 8000);
 }
 
-/* 浏览器朗读。听众是五六岁的孩子，单个汉字又一闪而过，所以放得很慢。
-   0.3 是试出来的下限 —— 再低苹果的引擎会把单音节拉长到发飘。
+/* 浏览器朗读。语速和发音准确度是冲突的：
+   压到 0.3 时苹果的引擎会把音节拉长，复韵母的滑动被抹平 ——
+   「月 yuè」听起来会塌成「玉 yù」，孩子反而学错音。
+   0.5 是兼顾清楚和够慢的折中，别再往下压了。
+   要更慢更准，只能让老师自己录音（「内容」里每个字的 🎤，录音优先播）。
    返回 false 表示这个环境放不出声。 */
-export function speak(text, { rate = 0.3, times = 1 } = {}) {
+export function speak(text, { rate = 0.5, times = 1 } = {}) {
   try {
     const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
     if (!synth) return false;
