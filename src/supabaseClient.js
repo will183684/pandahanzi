@@ -248,3 +248,12 @@ export async function markProgress(classLessonId, studentName, activityKey) {
   );
   if (error) throw error;
 }
+
+/* 改学生名字时，同时更新所有相关的学习进度记录 */
+export async function renameStudentEverywhereRpc(oldName, newName) {
+  const { error } = await supabase.rpc("rename_student_with_progress", {
+    old_name: oldName,
+    new_name: newName,
+  });
+  if (error) throw error;
+}

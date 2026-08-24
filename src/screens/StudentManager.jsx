@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C } from "../theme";
-import { getClasses } from "../supabaseClient";
+import { getClasses, renameStudentEverywhereRpc } from "../supabaseClient";
 import { Card } from "../components/ui";
 
 /* ===================================================================
@@ -49,12 +49,21 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
       return c;
     }));
   };
-  const renameStudent = (clsId, oldName, newName) => {
+  const renameStudent = async (clsId, oldName, newName) => {
     const nm = newName.trim();
     if (!nm || nm === oldName) return;
     const target = list.find((c) => c.id === clsId);
     if (target && target.students.includes(nm)) { pushToast("这个名字已在该班"); return; }
+
+    // 尝试调用 RPC 同时更新学习进度；如果函数不存在就只更新班级名单
+    try {
+      await renameStudentEverywhereRpc(oldName, nm);
+    } catch (e) {
+      // RPC 函数不存在（还没在 Supabase 创建）时，这里静默失败，继续只更新班级名单
+    }
+
     commit(list.map((c) => (c.id === clsId ? { ...c, students: c.students.map((x) => x === oldName ? nm : x) } : c)));
+    pushToast(`已改名：${oldName} → ${nm}`);
   };
 
   const inputStyle = {
