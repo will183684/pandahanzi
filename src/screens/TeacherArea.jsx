@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { C, LEVEL_BY_NO } from "../theme";
+import { Card } from "../components/ui";
 import Dashboard from "./Dashboard";
 import ContentSettings from "./ContentSettings";
 import StudentManager from "./StudentManager";
@@ -79,15 +80,21 @@ export default function TeacherArea({
       </div>
 
       {view === "dashboard" && (
-        <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} profiles={profiles} onOpenContent={() => setView("content")} />
+        <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} profiles={profiles} />
       )}
       {view === "content" && !isAdmin && (
-        <ContentSettings
-          lesson={lesson} chars={chars} charsFor={charsFor} busy={busy} pushToast={pushToast}
-          onOpenPicker={onOpenPicker} onSaveLesson={onSaveLesson}
-          onSaveChars={onSaveChars} onCompleteLesson={onCompleteLesson}
-          onBack={() => setView("dashboard")}
-        />
+        lesson ? (
+          <ContentSettings
+            lesson={lesson} chars={chars} charsFor={charsFor} busy={busy} pushToast={pushToast}
+            onOpenPicker={onOpenPicker} onSaveLesson={onSaveLesson}
+            onSaveChars={onSaveChars} onCompleteLesson={onCompleteLesson}
+            onBack={() => setView("dashboard")}
+          />
+        ) : (
+          <Card>
+            <p style={{ color: "#8A8276" }}>还没选课。请点「📖 课程库」或「换一课」选一个课程。</p>
+          </Card>
+        )
       )}
       {view === "curriculum" && (
         <CurriculumBrowser
