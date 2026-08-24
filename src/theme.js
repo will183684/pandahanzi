@@ -23,7 +23,7 @@ export const DEFAULTS = {
   students: [],
 };
 
-export const ADMIN_CODE = "panda@admin";     // 教务老师口令（可改）
+export const ADMIN_CODE = "8867";     // 教务老师口令（可改）
 
 /* 小朋友可选的头像。默认熊猫，跟品牌一致。
    只存一个 emoji 字符串，不涉及上传真人照片。 */
