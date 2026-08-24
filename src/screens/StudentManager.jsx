@@ -82,6 +82,48 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
         }}>＋ 添加</button>
       </div>
 
+      {/* 全部学生统计 */}
+      {(() => {
+        const allStudents = [];
+        list.forEach((c) => {
+          (c.students || []).forEach((nm) => {
+            if (!allStudents.includes(nm)) allStudents.push(nm);
+          });
+        });
+        allStudents.sort();
+        return (
+          <div style={{
+            background: "#FBEFCB",
+            border: `2px solid ${C.border}`,
+            borderRadius: 14,
+            padding: 12,
+            marginBottom: 16,
+          }}>
+            <div style={{ fontWeight: 800, marginBottom: 8, fontSize: 15 }}>
+              📋 全部学生 <span style={{ fontSize: 13, color: "#8A8276" }}>共 {allStudents.length} 人</span>
+            </div>
+            {allStudents.length === 0 ? (
+              <span style={{ color: "#9C9382", fontSize: 14 }}>还没有学生</span>
+            ) : (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {allStudents.map((nm) => (
+                  <span key={nm} style={{
+                    background: "#fff",
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 8,
+                    padding: "4px 10px",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}>
+                    {nm}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* per-class rosters */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {list.map((c) => (
