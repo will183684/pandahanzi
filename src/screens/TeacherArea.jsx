@@ -79,7 +79,7 @@ export default function TeacherArea({
       </div>
 
       {view === "dashboard" && (
-        <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} profiles={profiles} />
+        <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} profiles={profiles} onOpenContent={() => setView("content")} />
       )}
       {view === "content" && !isAdmin && (
         <ContentSettings

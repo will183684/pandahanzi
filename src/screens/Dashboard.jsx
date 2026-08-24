@@ -6,7 +6,7 @@ import { Card } from "../components/ui";
    进度看板 —— 本班当前这节课，每个学生完成了哪些活动。
    数据来自 lesson_progress（每个学生/每节课/每个活动一行）。
    =================================================================== */
-export default function Dashboard({ roster, progressRows, lesson, profiles }) {
+export default function Dashboard({ roster, progressRows, lesson, profiles, onOpenContent }) {
   const rows = useMemo(
     () => (progressRows || []).filter((r) => lesson && r.class_lesson_id === lesson.id),
     [progressRows, lesson]
@@ -32,12 +32,20 @@ export default function Dashboard({ roster, progressRows, lesson, profiles }) {
 
   return (
     <Card style={{ overflowX: "auto" }}>
-      <h3 style={{ marginTop: 0 }}>
-        📊 学习进度
-        <span style={{ fontSize: 13, color: "#9C9382", fontWeight: 600, marginLeft: 8 }}>
-          {lesson.title}
-        </span>
-      </h3>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+        <h3 style={{ marginTop: 0, marginBottom: 0 }}>
+          📊 学习进度
+          <span style={{ fontSize: 13, color: "#9C9382", fontWeight: 600, marginLeft: 8 }}>
+            {lesson.title}
+          </span>
+        </h3>
+        {lesson.status === "active" && onOpenContent && (
+          <button onClick={onOpenContent} style={{
+            minHeight: 40, padding: "0 12px", borderRadius: 10, border: "none",
+            background: C.gold, color: C.ink, fontWeight: 800, fontSize: 14, cursor: "pointer",
+          }}>✏️ 继续编辑</button>
+        )}
+      </div>
       {names.length === 0 ? (
         <p style={{ color: "#8A8276" }}>这个班还没有学生。请教务老师在「👧 学生」里添加。</p>
       ) : (
