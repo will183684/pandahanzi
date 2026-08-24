@@ -8,7 +8,7 @@ import { Card, BigButton } from "../components/ui";
    所有改动只落在本班的副本上，不影响课程库。
    =================================================================== */
 export default function ContentSettings({
-  lesson, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, pushToast, busy,
+  lesson, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onBack, pushToast, busy,
 }) {
   const [title, setTitle] = useState("");
   const [vocabStr, setVocabStr] = useState("");
@@ -192,6 +192,12 @@ export default function ContentSettings({
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {onBack && (
+            <button onClick={onBack} style={{
+              minHeight: 44, padding: "0 14px", borderRadius: 12, border: `2px solid ${C.border}`,
+              background: "#fff", color: C.ink, fontWeight: 700, cursor: "pointer",
+            }}>← 返回</button>
+          )}
           <button onClick={onOpenPicker} style={{
             minHeight: 44, padding: "0 14px", borderRadius: 12, border: `2px solid ${C.bamboo}`,
             background: "#fff", color: C.bamboo, fontWeight: 700, cursor: "pointer",

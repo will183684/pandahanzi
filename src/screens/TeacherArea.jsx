@@ -86,6 +86,7 @@ export default function TeacherArea({
           lesson={lesson} chars={chars} charsFor={charsFor} busy={busy} pushToast={pushToast}
           onOpenPicker={onOpenPicker} onSaveLesson={onSaveLesson}
           onSaveChars={onSaveChars} onCompleteLesson={onCompleteLesson}
+          onBack={() => setView("dashboard")}
         />
       )}
       {view === "curriculum" && (
