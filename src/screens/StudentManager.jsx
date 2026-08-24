@@ -10,6 +10,8 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
   const [list, setList] = useState(null); // [{id,name,invite_code,students:[]}]
   const [newName, setNewName] = useState("");
   const [addTo, setAddTo] = useState(activeClassId || "");
+  const [editKey, setEditKey] = useState(null);  // "clsId|oldName" 如果在编辑
+  const [editVal, setEditVal] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -46,6 +48,13 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
       if (c.id === toId) return { ...c, students: c.students.includes(nm) ? c.students : [...c.students, nm] };
       return c;
     }));
+  };
+  const renameStudent = (clsId, oldName, newName) => {
+    const nm = newName.trim();
+    if (!nm || nm === oldName) return;
+    const target = list.find((c) => c.id === clsId);
+    if (target && target.students.includes(nm)) { pushToast("这个名字已在该班"); return; }
+    commit(list.map((c) => (c.id === clsId ? { ...c, students: c.students.map((x) => x === oldName ? nm : x) } : c)));
   };
 
   const inputStyle = {
@@ -98,20 +107,90 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
             </div>
             {c.students.length === 0 && <span style={{ color: "#9C9382", fontSize: 14 }}>暂无学生</span>}
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {c.students.map((nm) => (
-                <div key={nm} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <span style={{ fontWeight: 700, flex: "1 1 80px" }}>{nm}</span>
-                  <select defaultValue="" onChange={(ev) => { moveStudent(c.id, nm, ev.target.value); ev.target.value = ""; }}
-                    style={{ ...inputStyle, minHeight: 44, padding: "6px 10px", fontSize: 14 }}>
-                    <option value="" disabled>移动到…</option>
-                    {list.filter((o) => o.id !== c.id).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
-                  <button onClick={() => removeStudent(c.id, nm)} style={{
-                    minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.border}`,
-                    background: "#fff", color: C.red, fontWeight: 700, cursor: "pointer",
-                  }}>删除</button>
-                </div>
-              ))}
+              {c.students.map((nm) => {
+                const isEditing = editKey === `${c.id}|${nm}`;
+                return (
+                  <div key={nm} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    {isEditing ? (
+                      <input
+                        autoFocus
+                        value={editVal}
+                        onChange={(ev) => setEditVal(ev.target.value)}
+                        onBlur={() => {
+                          renameStudent(c.id, nm, editVal);
+                          setEditKey(null);
+                        }}
+                        onKeyDown={(ev) => {
+                          if (ev.key === "Enter") {
+                            renameStudent(c.id, nm, editVal);
+                            setEditKey(null);
+                          } else if (ev.key === "Escape") {
+                            setEditKey(null);
+                          }
+                        }}
+                        style={{
+                          ...inputStyle,
+                          flex: "1 1 80px",
+                          minHeight: 44,
+                          padding: "8px 10px",
+                          fontSize: 14,
+                        }}
+                      />
+                    ) : (
+                      <span
+                        onClick={() => {
+                          setEditKey(`${c.id}|${nm}`);
+                          setEditVal(nm);
+                        }}
+                        style={{
+                          fontWeight: 700,
+                          flex: "1 1 80px",
+                          cursor: "pointer",
+                          padding: "4px 8px",
+                          borderRadius: 6,
+                          transition: "background 0.15s",
+                        }}
+                        onMouseEnter={(ev) => {
+                          ev.currentTarget.style.background = "#F5EFE7";
+                        }}
+                        onMouseLeave={(ev) => {
+                          ev.currentTarget.style.background = "transparent";
+                        }}
+                        title="点击编辑名字"
+                      >
+                        {nm}
+                      </span>
+                    )}
+                    {!isEditing && (
+                      <>
+                        <select
+                          defaultValue=""
+                          onChange={(ev) => { moveStudent(c.id, nm, ev.target.value); ev.target.value = ""; }}
+                          style={{ ...inputStyle, minHeight: 44, padding: "6px 10px", fontSize: 14 }}
+                        >
+                          <option value="" disabled>移动到…</option>
+                          {list.filter((o) => o.id !== c.id).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                        </select>
+                        <button
+                          onClick={() => removeStudent(c.id, nm)}
+                          style={{
+                            minHeight: 44,
+                            padding: "0 12px",
+                            borderRadius: 10,
+                            border: `2px solid ${C.border}`,
+                            background: "#fff",
+                            color: C.red,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          删除
+                        </button>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
