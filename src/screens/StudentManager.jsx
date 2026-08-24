@@ -26,8 +26,20 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
   }, []);
 
   const commit = (nlist) => {
-    setList(nlist);
-    onSaveClasses(nlist);
+    // 收集所有学生（包括历史），从第一个班级的 allStudents 开始
+    const historical = (nlist[0]?.allStudents || []).slice();
+    const current = new Set();
+    nlist.forEach((c) => {
+      (c.students || []).forEach((nm) => current.add(nm));
+    });
+    // 新增的学生加入历史列表
+    current.forEach((nm) => {
+      if (!historical.includes(nm)) historical.push(nm);
+    });
+    // 在所有班级上存一份全局列表（用第一个班级做容器）
+    const updatedList = nlist.map((c, i) => i === 0 ? { ...c, allStudents: historical } : c);
+    setList(updatedList);
+    onSaveClasses(updatedList);
   };
 
   const addStudent = () => {
@@ -39,6 +51,7 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
     setNewName("");
   };
   const removeStudent = (clsId, nm) => {
+    // 删除学生时，把他加入"已删除"名单，这样他还能在全部学生里看到
     commit(list.map((c) => (c.id === clsId ? { ...c, students: c.students.filter((x) => x !== nm) } : c)));
   };
   const moveStudent = (fromId, nm, toId) => {
@@ -91,15 +104,25 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
         }}>＋ 添加</button>
       </div>
 
-      {/* 全部学生统计 */}
+      {/* 全部学生统计（包括曾经创建过的所有学生，即使已删除） */}
       {(() => {
-        const allStudents = [];
+        // 从所有班级里收集当前学生
+        const currentStudents = new Set();
         list.forEach((c) => {
-          (c.students || []).forEach((nm) => {
-            if (!allStudents.includes(nm)) allStudents.push(nm);
-          });
+          (c.students || []).forEach((nm) => currentStudents.add(nm));
         });
-        allStudents.sort();
+
+        // 尝试从全局列表获取（如果存在）；否则就用当前学生
+        const globalAllStudents = list[0]?.allStudents || [];
+        const allStudents = globalAllStudents.length > 0
+          ? globalAllStudents
+          : Array.from(currentStudents).sort();
+
+        // 标记哪些学生已被删除
+        const deletedStudents = new Set(
+          allStudents.filter((nm) => !currentStudents.has(nm))
+        );
+
         return (
           <div style={{
             background: "#FBEFCB",
@@ -110,6 +133,9 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
           }}>
             <div style={{ fontWeight: 800, marginBottom: 8, fontSize: 15 }}>
               📋 全部学生 <span style={{ fontSize: 13, color: "#8A8276" }}>共 {allStudents.length} 人</span>
+              {deletedStudents.size > 0 && (
+                <span style={{ fontSize: 12, color: "#999", marginLeft: 8 }}>（{deletedStudents.size} 人已删除）</span>
+              )}
             </div>
             {allStudents.length === 0 ? (
               <span style={{ color: "#9C9382", fontSize: 14 }}>还没有学生</span>
@@ -117,12 +143,14 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {allStudents.map((nm) => (
                   <span key={nm} style={{
-                    background: "#fff",
+                    background: deletedStudents.has(nm) ? "#f0f0f0" : "#fff",
                     border: `1px solid ${C.border}`,
                     borderRadius: 8,
                     padding: "4px 10px",
                     fontSize: 14,
                     fontWeight: 600,
+                    opacity: deletedStudents.has(nm) ? 0.6 : 1,
+                    textDecoration: deletedStudents.has(nm) ? "line-through" : "none",
                   }}>
                     {nm}
                   </span>
