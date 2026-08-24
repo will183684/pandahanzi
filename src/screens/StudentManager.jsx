@@ -17,7 +17,19 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
     let alive = true;
     getClasses().then((cs) => {
       if (!alive) return;
-      const norm = cs.map((c) => ({ ...c, students: Array.isArray(c.students) ? c.students : [] }));
+      let norm = cs.map((c) => ({ ...c, students: Array.isArray(c.students) ? c.students : [] }));
+
+      // 如果还没有 allStudents，从当前所有学生初始化一次
+      if (norm[0] && !norm[0].allStudents) {
+        const allStudents = [];
+        norm.forEach((c) => {
+          (c.students || []).forEach((nm) => {
+            if (!allStudents.includes(nm)) allStudents.push(nm);
+          });
+        });
+        norm = norm.map((c, i) => i === 0 ? { ...c, allStudents } : c);
+      }
+
       setList(norm);
       if (!addTo && norm[0]) setAddTo(norm[0].id);
     }).catch(() => pushToast("读取班级失败 ⚠️"));
