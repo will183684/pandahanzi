@@ -83,26 +83,33 @@ function ensureKeepAlive() {
 /* 浏览器朗读。语速和发音准确度是冲突的：
    压到 0.3 时苹果的引擎会把音节拉长，复韵母的滑动被抹平 ——
    「月 yuè」听起来会塌成「玉 yù」，孩子反而学错音。
-   0.5 是兼顾清楚和够慢的折中，别再往下压了。
+   0.45 是目前的平衡点，试图改善连音问题。
    要更慢更准，只能让老师自己录音（「内容」里每个字的 🎤，录音优先播）。
    返回 false 表示这个环境放不出声。 */
-export function speak(text, { rate = 0.5, times = 1 } = {}) {
+export function speak(text, { rate = 0.45, times = 1, delay = 0 } = {}) {
   try {
     const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
     if (!synth) return false;
-    // 只在真的有东西在播时才 cancel —— 每次都调用容易把引擎卡死
-    if (synth.speaking || synth.pending) synth.cancel();
+    // 停止任何正在播放的音频（录音或 TTS）
+    stopAudio();
 
     const body = times > 1 ? Array(times).fill(text).join("、") : text;
-    const u = new window.SpeechSynthesisUtterance(body);
-    u.lang = "zh-CN";
-    u.rate = rate;
-    u.pitch = 1;
-    const v = pickVoice();
-    if (v) u.voice = v;
-    u.onerror = () => { /* 忽略引擎的瞬时错误 */ };
-    synth.speak(u);
-    ensureKeepAlive();
+    const scheduleSpeak = () => {
+      const u = new window.SpeechSynthesisUtterance(body);
+      u.lang = "zh-CN";
+      u.rate = rate;
+      u.pitch = 0.95;
+      const v = pickVoice();
+      if (v) u.voice = v;
+      u.onerror = () => { /* 忽略引擎的瞬时错误 */ };
+      synth.speak(u);
+      ensureKeepAlive();
+    };
+    if (delay > 0) {
+      setTimeout(scheduleSpeak, delay);
+    } else {
+      scheduleSpeak();
+    }
     return true;
   } catch (err) {
     return false;
@@ -111,6 +118,7 @@ export function speak(text, { rate = 0.5, times = 1 } = {}) {
 
 /* 放一个字：有老师录音就放录音，否则 TTS。 */
 export function playChar(ch, audioMap, opts) {
+  stopAudio();   // 停止任何正在播放的音
   const url = audioMap && audioMap[ch];
   if (url) {
     try {
