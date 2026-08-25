@@ -158,12 +158,35 @@ export async function getClassCharsBrief(classLessonIds) {
   return data || [];
 }
 
-/* 单节课的完整字表（含录音） */
+/* 单节课的完整字表（含录音）*/
 export async function getClassLessonChars(classLessonId) {
   const { data, error } = await supabase
     .from("class_lesson_chars").select("*").eq("class_lesson_id", classLessonId).order("pos");
   if (error) throw error;
-  return data || [];
+
+  // 补充共享音频：如果某字没有本班录音，查询是否有其他老师的共享音频
+  const result = await Promise.all(
+    (data || []).map(async (char) => {
+      if (char.audio_url) return char;  // 已有本班录音，使用本班的
+
+      // 查询是否有共享音频
+      try {
+        const shared = await getSharedAudio(char.char_id || 0);
+        if (shared) {
+          return {
+            ...char,
+            audio_url: shared.audio_url,
+            audio_source: `📻 ${shared.teacher_name} 配音`,  // 标记来源
+          };
+        }
+      } catch (e) {
+        // 共享音频表不存在时忽略
+      }
+      return char;
+    })
+  );
+
+  return result;
 }
 
 /* 选用一节标准课 → 拷贝进本班，并把上一节标记为完成
@@ -186,14 +209,42 @@ export async function startClassLesson(classId, lesson, existingLessons) {
   }).select().single();
   if (error) throw error;
 
-  const rows = (lesson.chars || []).map((c, i) => ({
-    class_lesson_id: data.id, hanzi: c.hanzi, pinyin: c.pinyin, emoji: c.emoji, pos: i + 1,
-  }));
+  // 为每个字查询是否有共享音频，一起拷贝
+  const charIds = lesson.chars ? await getCurriculumCharIds(lesson.chars.map(c => c.hanzi)) : [];
+  const sharedAudios = new Map();
+  for (const charId of charIds) {
+    try {
+      const shared = await getSharedAudio(charId);
+      if (shared) sharedAudios.set(charId, shared.audio_url);
+    } catch (e) {
+      // 共享音频表不存在时忽略
+    }
+  }
+
+  const rows = (lesson.chars || []).map((c, i) => {
+    const charId = charIds[i];
+    return {
+      class_lesson_id: data.id, hanzi: c.hanzi, pinyin: c.pinyin, emoji: c.emoji, pos: i + 1,
+      audio_url: sharedAudios.get(charId) || null,
+    };
+  });
   if (rows.length) {
     const { error: e2 } = await supabase.from("class_lesson_chars").insert(rows);
     if (e2) throw e2;
   }
   return data;
+}
+
+/* 根据汉字查询其在字库中的 ID（用于查询共享音频） */
+async function getCurriculumCharIds(hanzis) {
+  if (!hanzis.length) return [];
+  const { data, error } = await supabase
+    .from("characters")
+    .select("id,hanzi")
+    .in("hanzi", hanzis);
+  if (error) throw error;
+  const map = new Map((data || []).map((c) => [c.hanzi, c.id]));
+  return hanzis.map((h) => map.get(h) || 0);
 }
 
 export async function updateClassLesson(id, patch) {
@@ -256,4 +307,32 @@ export async function renameStudentEverywhereRpc(oldName, newName) {
     new_name: newName,
   });
   if (error) throw error;
+}
+
+/* ============================================================
+   共享音频（老师可配音，其他班级可复用）
+   ============================================================ */
+
+export async function getSharedAudio(charId) {
+  const { data, error } = await supabase.rpc("get_shared_audio", { char_id_param: charId });
+  if (error) throw error;
+  return data && data.length > 0 ? data[0] : null;
+}
+
+export async function saveSharedAudio(charId, teacherName, audioUrl) {
+  const { error } = await supabase.from("shared_audios").upsert(
+    { char_id: charId, teacher_name: teacherName, audio_url: audioUrl },
+    { onConflict: "char_id,teacher_name" }
+  );
+  if (error) throw error;
+}
+
+export async function getCharSharedAudios(charId) {
+  const { data, error } = await supabase
+    .from("shared_audios")
+    .select("teacher_name,audio_url,created_at")
+    .eq("char_id", charId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
 }

@@ -4,6 +4,7 @@ import {
   getCurriculum, getClassLessons, getClassCharsBrief, getClassLessonChars,
   startClassLesson, updateClassLesson, completeClassLesson, saveClassLessonChars,
   getClassProgress, markProgress, getProfiles, saveProfile, deleteClassLesson,
+  saveSharedAudio, getCharSharedAudios,
 } from "./supabaseClient";
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
@@ -239,9 +240,29 @@ export default function PandaHanziApp() {
   }, [currentLesson, run]);
 
   const saveChars = useCallback((rows) => {
-    if (!currentLesson) return;
-    run(() => saveClassLessonChars(currentLesson.id, rows), null, "字表保存失败 ⚠️");
-  }, [currentLesson, run]);
+    if (!currentLesson || !curriculum || !session) return;
+    run(
+      async () => {
+        await saveClassLessonChars(currentLesson.id, rows);
+        // 如果老师有录音，也保存到共享音频库（方便其他班级复用）
+        if (session.role === "teacher" && session.name) {
+          const charMap = new Map(curriculum.characters.map((c) => [c.hanzi, c]));
+          for (const row of rows) {
+            if (row.audio_url && charMap.has(row.hanzi)) {
+              const char = charMap.get(row.hanzi);
+              try {
+                await saveSharedAudio(char.id, session.name, row.audio_url);
+              } catch (e) {
+                // 共享音频表不存在时忽略
+              }
+            }
+          }
+        }
+      },
+      null,
+      "字表保存失败 ⚠️"
+    );
+  }, [currentLesson, curriculum, session, run]);
 
   /* 删掉某一次课（字表和进度靠外键级联）。删的是当前正在上的课时，
      currentLesson 会自动回退到上一次课。 */

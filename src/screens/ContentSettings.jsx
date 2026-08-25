@@ -255,6 +255,14 @@ export default function ContentSettings({
                   minHeight: 44, padding: "0 10px", borderRadius: 10, border: `2px solid ${C.border}`,
                   background: "#fff", cursor: "pointer", fontSize: 16,
                 }}>▶️</button>
+                {r.audio_source && (
+                  <span style={{
+                    fontSize: 12, color: "#8A8276", fontWeight: 600, padding: "2px 8px",
+                    background: "#F5EFE7", borderRadius: 6,
+                  }}>
+                    {r.audio_source}
+                  </span>
+                )}
                 <button onClick={() => patchRow(i, { audio_url: null })} style={{
                   minHeight: 44, padding: "0 8px", borderRadius: 10, border: `2px solid ${C.border}`,
                   background: "#fff", color: "#9C9382", cursor: "pointer", fontSize: 13,
