@@ -11,10 +11,21 @@ export default function Landing({ onEnter, pushToast, session }) {
   /* 从班里「返回班级」回来时 session 还在 —— 直接落到选班级那一屏，
      不用再输一次口令。 */
   const restored = session && (session.role === "teacher" || session.role === "admin") ? session : null;
-  const [tab, setTab] = useState(restored ? restored.role : "parent");
-  const [childName, setChildName] = useState("");
-  const [invite, setInvite] = useState("");
-  const [pw, setPw] = useState("");
+
+  // 从 localStorage 恢复保存的登录信息
+  const getSavedLogin = () => {
+    try {
+      const saved = localStorage.getItem("panda_login");
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+  };
+
+  const savedLogin = getSavedLogin();
+  const [tab, setTab] = useState(restored ? restored.role : (savedLogin ? savedLogin.role : "parent"));
+  const [childName, setChildName] = useState(savedLogin && savedLogin.role === "parent" ? savedLogin.name : "");
+  const [invite, setInvite] = useState(savedLogin && savedLogin.role === "parent" ? savedLogin.invite : "");
+  const [pw, setPw] = useState(savedLogin && (savedLogin.role === "teacher" || savedLogin.role === "admin") ? savedLogin.pw : "");
+  const [remember, setRemember] = useState(!!savedLogin);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -69,6 +80,10 @@ export default function Landing({ onEnter, pushToast, session }) {
       if (roster.length > 0 && !roster.includes(nm)) {
         setErr("找不到这个名字，请联系老师确认 🐼"); setBusy(false); return;
       }
+      // 保存登录信息
+      if (remember) {
+        localStorage.setItem("panda_login", JSON.stringify({ role: "parent", name: nm, invite }));
+      }
       onEnter(cls, { role: "parent", name: nm });
     } catch (e) {
       setErr("连接失败，请检查网络 ⚠️"); setBusy(false);
@@ -86,6 +101,10 @@ export default function Landing({ onEnter, pushToast, session }) {
       if (!match) { setErr("口令不对，请再试一次"); setBusy(false); return; }
       const assignedIds = Array.isArray(match.classIds) ? match.classIds : [];
       const filtered = classes.filter((c) => assignedIds.includes(c.id));
+      // 保存登录信息
+      if (remember) {
+        localStorage.setItem("panda_login", JSON.stringify({ role: "teacher", name: match.name, pw }));
+      }
       setTeacherInfo(match);
       setTeacherClasses(filtered);
       setTeacherAuthed(true);
@@ -97,6 +116,10 @@ export default function Landing({ onEnter, pushToast, session }) {
   const submitAdmin = async () => {
     setErr("");
     if (pw !== ADMIN_CODE) { setErr("口令不对，请再试一次"); return; }
+    // 保存登录信息
+    if (remember) {
+      localStorage.setItem("panda_login", JSON.stringify({ role: "admin", pw }));
+    }
     setBusy(true);
     try {
       const list = await getClasses();
@@ -163,7 +186,7 @@ export default function Landing({ onEnter, pushToast, session }) {
 
       <div style={{ display: "flex", gap: 6, marginBottom: 14, background: "#F1E9DC", padding: 6, borderRadius: 14 }}>
         {tabs.map((t) => (
-          <button key={t.k} onClick={() => { setTab(t.k); setErr(""); setPw(""); }} style={{
+          <button key={t.k} onClick={() => { setTab(t.k); setErr(""); setPw(""); setRemember(false); }} style={{
             flex: 1, minHeight: 48, borderRadius: 10, border: "none", cursor: "pointer", fontSize: 15, fontWeight: 700,
             background: tab === t.k ? "#fff" : "transparent", color: tab === t.k ? C.ink : "#8A8276",
             boxShadow: tab === t.k ? "0 2px 6px rgba(0,0,0,0.08)" : "none",
@@ -181,6 +204,11 @@ export default function Landing({ onEnter, pushToast, session }) {
             <label style={lbl}>班级邀请码</label>
             <input style={inputStyle} value={invite} placeholder="老师给的邀请码"
               onChange={(ev) => setInvite(ev.target.value)} onKeyDown={(ev) => ev.key === "Enter" && submitParent()} />
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={remember} onChange={(ev) => setRemember(ev.target.checked)}
+                style={{ width: 18, height: 18, cursor: "pointer" }} />
+              <span style={{ fontSize: 14, color: "#6B6356", fontWeight: 600 }}>记住我</span>
+            </label>
             <BigButton color={C.bamboo} onClick={submitParent} disabled={busy} style={{ marginTop: 4 }}>
               {busy ? "请稍候…" : "开始练习 🚀"}
             </BigButton>
@@ -194,13 +222,25 @@ export default function Landing({ onEnter, pushToast, session }) {
             <input style={inputStyle} type="password" value={pw} placeholder="请输入你的口令"
               onChange={(ev) => setPw(ev.target.value)} onKeyDown={(ev) => ev.key === "Enter" && submitTeacher()} />
             <p style={{ fontSize: 13, color: "#9C9382", margin: 0 }}>每位授课老师有自己的口令，由教务老师分配</p>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={remember} onChange={(ev) => setRemember(ev.target.checked)}
+                style={{ width: 18, height: 18, cursor: "pointer" }} />
+              <span style={{ fontSize: 14, color: "#6B6356", fontWeight: 600 }}>记住我</span>
+            </label>
             <BigButton color={C.bamboo} onClick={submitTeacher} disabled={busy}>{busy ? "请稍候…" : "进入 →"}</BigButton>
           </div>
         )}
 
         {tab === "teacher" && teacherAuthed && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>👋 {teacherInfo.name}，请选择班级</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>👋 {teacherInfo.name}，请选择班级</p>
+              <button onClick={() => { localStorage.removeItem("panda_login"); setTeacherAuthed(false); setPw(""); }}
+                style={{ fontSize: 12, padding: "4px 8px", border: "none", background: "#FFE5E5",
+                  color: "#9C9382", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
+                🚪 清除记忆
+              </button>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {teacherClasses.length === 0 && <span style={{ color: "#9C9382", fontSize: 14 }}>你还没有被分配班级，请联系教务老师。</span>}
               {teacherClasses.map((c) => (
@@ -225,12 +265,25 @@ export default function Landing({ onEnter, pushToast, session }) {
             <label style={lbl}>教务口令</label>
             <input style={inputStyle} type="password" value={pw} placeholder="请输入教务老师口令"
               onChange={(ev) => setPw(ev.target.value)} onKeyDown={(ev) => ev.key === "Enter" && submitAdmin()} />
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={remember} onChange={(ev) => setRemember(ev.target.checked)}
+                style={{ width: 18, height: 18, cursor: "pointer" }} />
+              <span style={{ fontSize: 14, color: "#6B6356", fontWeight: 600 }}>记住我</span>
+            </label>
             <BigButton color={C.bamboo} onClick={submitAdmin} disabled={busy}>{busy ? "请稍候…" : "进入 →"}</BigButton>
           </div>
         )}
 
         {tab === "admin" && adminAuthed && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 700, fontSize: 15, color: "#6B6356" }}>👋 教务老师</span>
+              <button onClick={() => { localStorage.removeItem("panda_login"); setAdminAuthed(false); setPw(""); }}
+                style={{ fontSize: 12, padding: "4px 8px", border: "none", background: "#FFE5E5",
+                  color: "#9C9382", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
+                🚪 清除记忆
+              </button>
+            </div>
             <div>
               <label style={lbl}>选择班级</label>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
