@@ -39,19 +39,22 @@ export default function LessonEditor({
     setBusy(true);
     try {
       await saveClassLessonChars(selectedId, rows);
-      /* 录了音就同时进共享库，别的老师选同一课能直接用 */
+      /* 录了音就同时进共享库，别的老师选同一课能直接用。
+         这一步失败不该挡住字表保存，但也别闷着 —— 之前 RLS 拦掉写入，
+         界面照样报「已保存」，老师换个班就发现录音没共享过去。 */
+      let sharedFailed = false;
       if (curriculum && session && session.role === "teacher" && session.name) {
         const charMap = new Map(curriculum.characters.map((c) => [c.hanzi, c]));
         for (const row of rows) {
           const ch = charMap.get(row.hanzi);
           if (!row.audio_url || !ch) continue;
           try { await saveSharedAudio(ch.id, session.name, row.audio_url); }
-          catch (e) { /* 共享库还没建，忽略 */ }
+          catch (e) { sharedFailed = true; }
         }
       }
       const fresh = await getClassLessonChars(selectedId);
       setChars(fresh);
-      pushToast("已保存 ✅");
+      pushToast(sharedFailed ? "本班已保存 ✅　但录音没能共享给其他班 ⚠️" : "已保存 ✅");
       if (onAfterSave) onAfterSave();
     } catch (e) {
       pushToast("字表保存失败 ⚠️");
