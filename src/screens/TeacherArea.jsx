@@ -2,7 +2,7 @@ import { useState } from "react";
 import { C, LEVEL_BY_NO } from "../theme";
 import { Card } from "../components/ui";
 import Dashboard from "./Dashboard";
-import ContentSettings from "./ContentSettings";
+import LessonEditor from "./LessonEditor";
 import StudentManager from "./StudentManager";
 import TeacherManager from "./TeacherManager";
 import ClassManager from "./ClassManager";
@@ -15,21 +15,28 @@ export const ghostBtn = {
 };
 
 /* ===================================================================
-   Teacher / Admin area (tabs: progress / content / students / teachers)
+   Teacher / Admin area
+
+   授课老师这边分成两件事，别混在一起：
+     · 「📊 进度」  —— 布置课程给这个班 + 看孩子完成情况
+     · 「📚 课程编辑」—— 改任意一节课的内容（字 / 录音 / 词句）
+   以前只有一个「内容」页，只能改「正在上」的那节课，想回去改上一课
+   得点「再上一次」，那会新建一条排课记录、录音看着就丢了。
    =================================================================== */
 export default function TeacherArea({
-  role, className, roster, activeClassId,
+  role, className, roster, activeClassId, classLessons, charsOf, session,
   lesson, chars, charsFor, progressRows, profiles, level, curriculum, myClassIds,
-  onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson,
+  onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onAfterSave,
   onOpenArchive, onLogout, onLeaveClass, onSaveClasses, pushToast, busy,
 }) {
   const [view, setView] = useState("dashboard");
   const isAdmin = role === "admin";
-  /* 教务管班级/老师/学生；备课（选课、改字表）是授课老师的事，
-     所以「内容」只给授课老师看。 */
+  /* 教务管班级/老师/学生；授课老师有两个编辑界面：
+     - 进度：布置课程给班级
+     - 课程编辑：自由编辑任何课程的内容（不涉及班级） */
   const tabs = [{ k: "dashboard", t: "📊 进度" }];
-  if (!isAdmin) tabs.push({ k: "content", t: "✏️ 内容" });
-  tabs.push({ k: "curriculum", t: "📖 课程库" });   // 教务和老师都能布置课程
+  if (!isAdmin) tabs.push({ k: "editor", t: "📚 课程编辑" });
+  tabs.push({ k: "curriculum", t: "📖 课程库" });   // 教务和老师都能查看课程库
   if (isAdmin) {
     tabs.push(
       { k: "classes", t: "🏫 班级" },
@@ -80,21 +87,45 @@ export default function TeacherArea({
       </div>
 
       {view === "dashboard" && (
-        <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} profiles={profiles} />
+        <>
+          {!isAdmin && (
+            <Card>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                flexWrap: "wrap", gap: 10,
+              }}>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 16 }}>
+                    {lesson ? `🔵 正在上：${lesson.title}` : "还没安排课程"}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#9C9382" }}>
+                    {lesson ? "换一节课后，这一节会记为已上过，内容和录音都留着。" : "先布置一节课，孩子那边才有练习。"}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button onClick={onOpenPicker} style={{
+                    minHeight: 44, padding: "0 16px", borderRadius: 12, border: "none",
+                    background: C.bamboo, color: "#fff", fontWeight: 800, cursor: "pointer",
+                  }}>📚 布置课程</button>
+                  {lesson && lesson.status === "active" && (
+                    <button onClick={onCompleteLesson} disabled={busy} style={{
+                      minHeight: 44, padding: "0 14px", borderRadius: 12, border: "none",
+                      background: C.gold, color: C.ink, fontWeight: 800, cursor: "pointer",
+                    }}>✅ 完成本课</button>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+          <Dashboard roster={roster} progressRows={progressRows} lesson={lesson} profiles={profiles} />
+        </>
       )}
-      {view === "content" && !isAdmin && (
-        lesson ? (
-          <ContentSettings
-            lesson={lesson} chars={chars} charsFor={charsFor} busy={busy} pushToast={pushToast}
-            onOpenPicker={onOpenPicker} onSaveLesson={onSaveLesson}
-            onSaveChars={onSaveChars} onCompleteLesson={onCompleteLesson}
-            onBack={() => setView("dashboard")}
-          />
-        ) : (
-          <Card>
-            <p style={{ color: "#8A8276" }}>还没选课。请点「📖 课程库」或「换一课」选一个课程。</p>
-          </Card>
-        )
+      {view === "editor" && !isAdmin && (
+        <LessonEditor
+          classLessons={classLessons} charsOf={charsOf} curriculum={curriculum}
+          session={session} pushToast={pushToast}
+          onAfterSave={onAfterSave} onOpenPicker={onOpenPicker}
+        />
       )}
       {view === "curriculum" && (
         <CurriculumBrowser

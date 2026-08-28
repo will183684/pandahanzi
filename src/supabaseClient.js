@@ -195,6 +195,19 @@ export async function startClassLesson(classId, lesson, existingLessons) {
   const active = existingLessons.find((l) => l.status === "active");
   if (active) await completeClassLesson(active.id);
 
+  /* 这一课本班上过了 —— 直接把那条记录重新设为 active，不再插新的。
+     以前每次「再上一次」都插一条新记录，字表是空白副本，老师之前
+     录的音、改的拼音全留在旧记录里，看上去就是「录音没了」。 */
+  const prev = existingLessons.find((l) => l.lesson_id === lesson.id);
+  if (prev) {
+    const { data, error } = await supabase.from("class_lessons")
+      .update({ status: "active", completed_at: null })
+      .eq("id", prev.id)
+      .select().single();
+    if (error) throw error;
+    return data;
+  }
+
   const seq = existingLessons.reduce((m, l) => Math.max(m, l.seq), 0) + 1;
   const { data, error } = await supabase.from("class_lessons").insert({
     class_id: classId,

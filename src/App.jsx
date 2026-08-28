@@ -423,6 +423,9 @@ export default function PandaHanziApp() {
             className={activeClass.name}
             roster={activeClass.students || []}
             activeClassId={activeClass.id}
+            classLessons={classLessons}
+            charsOf={charsOf}
+            session={session}
             lesson={currentLesson}
             chars={viewChars}
             charsFor={charsFor}
@@ -436,6 +439,8 @@ export default function PandaHanziApp() {
             onSaveLesson={saveLesson}
             onSaveChars={saveChars}
             onCompleteLesson={finishLesson}
+            /* 「课程编辑」自己存自己的库，存完让 App 重新拉一遍班级数据 */
+            onAfterSave={() => { reload().catch(() => {}); setCharsTick((t) => t + 1); }}
             onOpenArchive={() => setArchiveOpen(true)}
             onLogout={logout}
             onLeaveClass={leaveClass}

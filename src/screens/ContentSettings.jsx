@@ -10,6 +10,9 @@ import { supabase } from "../supabaseClient";
    =================================================================== */
 export default function ContentSettings({
   lesson, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onBack, pushToast, busy,
+  /* editMode：从「课程编辑」进来的，只改内容 —— 藏掉「换一课 / 完成本课」
+     这些会动排课状态的按钮。 */
+  editMode = false,
 }) {
   const [title, setTitle] = useState("");
   const [vocabStr, setVocabStr] = useState("");
@@ -177,9 +180,11 @@ export default function ContentSettings({
           <p style={{ color: "#8A8276", fontSize: 15, marginTop: 0 }}>
             从 240 节课里选一节，5 个字会自动填好（带拼音）。
           </p>
-          <BigButton color={C.bamboo} onClick={onOpenPicker} style={{ marginTop: 8 }}>
-            📚 去选课
-          </BigButton>
+          {onOpenPicker && (
+            <BigButton color={C.bamboo} onClick={onOpenPicker} style={{ marginTop: 8 }}>
+              📚 去选课
+            </BigButton>
+          )}
         </div>
       </Card>
     );
@@ -202,7 +207,7 @@ export default function ContentSettings({
           <span style={{ fontSize: 13, color: "#9C9382" }}>
             本班第 {lesson.seq} 次课
             {lesson.lesson_id ? "　·　来自课程库" : "　·　自建"}
-            {lesson.status === "completed" && "　·　已完成 ✅"}
+            {lesson.status === "active" ? "　·　正在上 🔵" : "　·　已上过"}
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -212,11 +217,13 @@ export default function ContentSettings({
               background: "#fff", color: C.ink, fontWeight: 700, cursor: "pointer",
             }}>← 返回</button>
           )}
-          <button onClick={onOpenPicker} style={{
-            minHeight: 44, padding: "0 14px", borderRadius: 12, border: `2px solid ${C.bamboo}`,
-            background: "#fff", color: C.bamboo, fontWeight: 700, cursor: "pointer",
-          }}>📚 换一课</button>
-          {lesson.status === "active" && (
+          {!editMode && onOpenPicker && (
+            <button onClick={onOpenPicker} style={{
+              minHeight: 44, padding: "0 14px", borderRadius: 12, border: `2px solid ${C.bamboo}`,
+              background: "#fff", color: C.bamboo, fontWeight: 700, cursor: "pointer",
+            }}>📚 换一课</button>
+          )}
+          {!editMode && lesson.status === "active" && onCompleteLesson && (
             <button onClick={onCompleteLesson} disabled={busy} style={{
               minHeight: 44, padding: "0 14px", borderRadius: 12, border: "none",
               background: C.gold, color: C.ink, fontWeight: 800, cursor: "pointer",
