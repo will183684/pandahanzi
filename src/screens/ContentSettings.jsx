@@ -70,11 +70,17 @@ export default function ContentSettings({
       mr.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
         try {
-          // 上传到 Supabase Storage
-          const fileName = `audio_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.webm`;
+          /* 后缀和 content-type 都跟着录出来的实际格式走。
+             iPhone 的 MediaRecorder 出的是 audio/mp4，写死成 .webm /
+             audio/webm 的话 Safari 直接放不出来（它根本不支持 webm 音频）。 */
+          const type = (blob.type || "audio/webm").split(";")[0];
+          const ext = type.includes("mp4") ? "m4a"
+            : type.includes("ogg") ? "ogg"
+            : type.includes("wav") ? "wav" : "webm";
+          const fileName = `audio_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
           const { data, error } = await supabase.storage
             .from("lesson_audios")
-            .upload(fileName, blob, { contentType: "audio/webm" });
+            .upload(fileName, blob, { contentType: type });
 
           if (error) throw error;
 
@@ -123,11 +129,19 @@ export default function ContentSettings({
   const playPreview = (url) => {
     if (!url) return;
     try {
-      if (!previewRef.current) previewRef.current = new Audio();
-      previewRef.current.src = url;
-      previewRef.current.currentTime = 0;
-      const p = previewRef.current.play();
-      if (p && p.catch) p.catch(() => {});
+      /* 每次都新建一个 Audio，不复用。
+         iOS 刚录完音时音频会话还在「录音」模式，那会儿建出来的 Audio
+         元素会一直被路由到听筒、几乎听不见 —— 复用它就一直是哑的。 */
+      try { if (previewRef.current) previewRef.current.pause(); } catch (e) { /* ignore */ }
+      const el = new Audio();
+      el.preload = "auto";
+      el.playsInline = true;
+      el.volume = 1;
+      previewRef.current = el;
+      el.onerror = () => pushToast("这段录音放不出来 ⚠️");
+      el.src = url;
+      const p = el.play();
+      if (p && p.catch) p.catch(() => pushToast("手机静音键打开了？放不出声音 🔇"));
     } catch (e) { /* ignore */ }
   };
 
