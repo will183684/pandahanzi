@@ -253,15 +253,15 @@ export default function ContentSettings({
         </div>
       </div>
 
-      {/* 改的不是正在上的那一课，学生端是看不到的 —— 说清楚，
-          不然老师录完音去学生端找不着，会以为录音丢了。 */}
+      {/* 改动对学生是实时生效的，只是这一课不在首页 —— 老师录完音去
+          学生首页找不着，容易误以为没保存上。说清楚去哪儿找。 */}
       {editMode && lesson.status !== "active" && (
         <div style={{
-          background: "#FFFBF2", border: `2px solid ${C.gold}`, borderRadius: 12,
-          padding: "10px 12px", marginBottom: 14, fontSize: 14, color: "#8a6d12",
+          background: "#F5EFE7", border: `2px solid ${C.border}`, borderRadius: 12,
+          padding: "10px 12px", marginBottom: 14, fontSize: 14, color: "#6B6356",
         }}>
-          这一课不是本班正在上的课，改动<b>不会</b>出现在学生端。
-          要让孩子练这一课，去「📊 进度」里布置它（之前的录音和字表都留着）。
+          这一课已经上过了，改动马上生效。孩子在「📚 历史记录」里能找到它 ——
+          首页显示的是正在上的那一课。
         </div>
       )}
 
