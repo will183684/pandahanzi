@@ -137,6 +137,8 @@ export function Shell({ children, banner }) {
       </main>
       <footer style={{ textAlign: "center", padding: "14px", color: "#9C9382", fontSize: 14 }}>
         一起学中文，天天有进步 🐼
+        {/* 版本号：手机上看到的是不是最新一版，看这里就知道 */}
+        <div style={{ fontSize: 11, color: "#C4BCAD", marginTop: 4 }}>v{__BUILD_TIME__}</div>
       </footer>
     </div>
   );
