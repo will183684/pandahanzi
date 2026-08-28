@@ -87,7 +87,14 @@ export default function ContentSettings({
           setDirty(true);
           pushToast("录好了，记得点保存 ✅");
         } catch (err) {
-          pushToast("上传失败，请检查网络 ⚠️");
+          /* 别一律报「检查网络」—— 上传失败十有八九是 Storage 的
+             权限没配（403 RLS），网络其实好好的，那句提示只会带偏。 */
+          const msg = String((err && err.message) || err);
+          pushToast(
+            /row-level security|Unauthorized|403/i.test(msg) ? "没有上传权限，要配一下 Storage 权限 ⚠️"
+              : /not found|Bucket/i.test(msg) ? "找不到录音存储空间 lesson_audios ⚠️"
+              : `上传失败：${msg} ⚠️`
+          );
           console.error("Audio upload failed:", err);
         }
         stopTracks();
