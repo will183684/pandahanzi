@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { C } from "../theme";
 import { Card, BigButton } from "../components/ui";
+import { supabase } from "../supabaseClient";
 
 /* ===================================================================
    本课内容设置 —— 编辑本班当前这节课：
@@ -63,16 +64,29 @@ export default function ContentSettings({
       chunksRef.current = [];
       const mr = new window.MediaRecorder(stream);
       mr.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunksRef.current.push(ev.data); };
-      mr.onstop = () => {
+      mr.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
-        const reader = new FileReader();
-        reader.onload = () => {
-          setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, audio_url: reader.result } : r)));
+        try {
+          // 上传到 Supabase Storage
+          const fileName = `audio_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.webm`;
+          const { data, error } = await supabase.storage
+            .from("lesson_audios")
+            .upload(fileName, blob, { contentType: "audio/webm" });
+
+          if (error) throw error;
+
+          // 获取公开 URL
+          const { data: urlData } = supabase.storage
+            .from("lesson_audios")
+            .getPublicUrl(data.path);
+
+          setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, audio_url: urlData.publicUrl } : r)));
           setDirty(true);
           pushToast("录好了，记得点保存 ✅");
-        };
-        reader.onerror = () => pushToast("录音保存失败 ⚠️");
-        reader.readAsDataURL(blob);
+        } catch (err) {
+          pushToast("上传失败，请检查网络 ⚠️");
+          console.error("Audio upload failed:", err);
+        }
         stopTracks();
         setRecIdx(null);
       };
