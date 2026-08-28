@@ -82,8 +82,19 @@ export default function LessonEditor({
     );
   }
 
-  /* ---------------- 课程列表 ---------------- */
-  const list = classLessons.slice().sort((a, b) => b.seq - a.seq);
+  /* ---------------- 课程列表 ----------------
+     按课程库的顺序排（L1第1课、L1第2课…），不是按上课先后 ——
+     老师是照着课号找课的，按 seq 排看着就是乱的。
+     自建的课（没有 lesson_id）排在最后，按上课先后。 */
+  const lessonNoOf = (l) => {
+    const src = curriculum && l.lesson_id != null ? curriculum.lessonById.get(l.lesson_id) : null;
+    return src ? src.lesson_no : Infinity;
+  };
+  const list = classLessons.slice().sort((a, b) => {
+    const na = lessonNoOf(a), nb = lessonNoOf(b);
+    if (na !== nb) return na - nb;      // Infinity 相等时落到 seq
+    return a.seq - b.seq;
+  });
 
   return (
     <Card>
