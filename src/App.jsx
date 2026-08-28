@@ -445,7 +445,7 @@ export default function PandaHanziApp() {
         )}
         {pickerOpen && curriculum && (
           <LessonPicker
-            curriculum={curriculum} classLessons={classLessons} busy={busy}
+            curriculum={curriculum} classLessons={classLessons} busy={false}
             onPick={pickLesson} onClose={() => setPickerOpen(false)}
           />
         )}
