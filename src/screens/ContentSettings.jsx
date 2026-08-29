@@ -65,7 +65,13 @@ export default function ContentSettings({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       chunksRef.current = [];
-      const mr = new window.MediaRecorder(stream);
+      /* 能录 mp4 就录 mp4。默认格式在电脑 Chrome 上是 webm，而 Safari 和
+         iPhone 放不了 webm 音频 —— 老师在电脑上录的音，孩子在 iPad/iPhone
+         上就成了哑的，退回机器朗读，听着像「录音没生效」。
+         mp4 两边都能放，录音也会进共享库给别的班用，所以格式必须通用。 */
+      const want = ["audio/mp4", "audio/mp4;codecs=mp4a.40.2"]
+        .find((t) => window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t));
+      const mr = new window.MediaRecorder(stream, want ? { mimeType: want } : undefined);
       mr.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunksRef.current.push(ev.data); };
       mr.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
