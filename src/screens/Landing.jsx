@@ -3,6 +3,7 @@ import { C, ADMIN_CODE } from "../theme";
 import { normCode } from "../utils";
 import { getClasses, saveClasses, deleteClassRecords, getTeachers } from "../supabaseClient";
 import { Card, BigButton, ConfirmDialog } from "../components/ui";
+import FaqPanel from "./FaqPanel";
 
 /* ===================================================================
    Landing — 3-tab login: parent / teacher / admin
@@ -26,6 +27,7 @@ export default function Landing({ onEnter, pushToast, session }) {
   const [invite, setInvite] = useState(savedLogin && savedLogin.role === "parent" ? savedLogin.invite : "");
   const [pw, setPw] = useState(savedLogin && (savedLogin.role === "teacher" || savedLogin.role === "admin") ? savedLogin.pw : "");
   const [remember, setRemember] = useState(!!savedLogin);
+  const [faqOpen, setFaqOpen] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -324,6 +326,17 @@ export default function Landing({ onEnter, pushToast, session }) {
 
         {err && <p style={{ color: C.red, fontWeight: 700, marginTop: 12, marginBottom: 0 }}>{err}</p>}
       </Card>
+
+      {/* 常见问题：登录不进去、听不到声音这类问题，家长在这一屏就能自己解决 */}
+      <div style={{ textAlign: "center", margin: "14px 0 24px" }}>
+        <button onClick={() => setFaqOpen(true)} style={{
+          minHeight: 44, padding: "0 18px", borderRadius: 12, border: "none",
+          background: "none", color: "#8A8276", fontSize: 15, fontWeight: 700,
+          cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 4,
+        }}>❓ 常见问题</button>
+      </div>
+
+      {faqOpen && <FaqPanel onClose={() => setFaqOpen(false)} />}
 
       {pendingClass && (
         <ConfirmDialog
