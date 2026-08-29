@@ -45,10 +45,11 @@ export default function ArchivePanel({ lessons, currentId, charsOf, getProgress,
                   </span>
                 )}
               </div>
-              <div style={{ fontSize: 13, color: "#9C9382", margin: "2px 0 6px" }}>
-                第 {l.seq} 次课 · {new Date(l.started_at).toLocaleDateString("zh-CN")}
-              </div>
-              <div style={{ fontSize: 22, letterSpacing: 2, marginBottom: 6 }}>
+              {/* 原来这里写「第 N 次课 · 日期」，两个都不可信：
+                  seq 是排进本班的顺序，started_at 是老师布置的时间，
+                  都不是真正上课的时间 —— 下周才上的课会显示成已经上过。
+                  课名和字表已经够认出是哪一课了，索性不写。 */}
+              <div style={{ fontSize: 22, letterSpacing: 2, margin: "6px 0" }}>
                 {"⭐".repeat(stars)}{"☆".repeat(ACTIVITIES.length - stars)}
               </div>
               <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: 4 }}>{charsOf(l.id)}</div>
