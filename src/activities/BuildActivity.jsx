@@ -103,17 +103,9 @@ export default function BuildActivity({ meta, onDone }) {
                 fontSize: 42, fontWeight: 800, color: C.ink,
                 cursor: tl && !given ? "pointer" : "default",
                 animation: shake ? "pa-shake .4s" : "none",
-                position: "relative",
               }}
             >
               {tl ? tl.ch : ""}
-              {given && (
-                <span style={{
-                  position: "absolute", top: -9, left: "50%", transform: "translateX(-50%)",
-                  background: C.gold, color: C.ink, fontSize: 11, fontWeight: 800,
-                  borderRadius: 999, padding: "1px 7px", whiteSpace: "nowrap",
-                }}>送你的</span>
-              )}
             </button>
           );
         })}
