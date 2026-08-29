@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { C } from "../theme";
-import { Card, BigButton } from "../components/ui";
+import { Card, BigButton, ConfirmDialog } from "../components/ui";
 import { supabase } from "../supabaseClient";
+import { pickRecorderMime, toPlayableBlob, extFor } from "../recordingFormat";
 
 /* ===================================================================
    本课内容设置 —— 编辑本班当前这节课：
@@ -37,13 +38,15 @@ export default function ContentSettings({
     setVocabStr((lesson.vocab || []).join(" "));
     setSentence(lesson.sentence || "");
     setRows(list.map((c) => ({
-      hanzi: c.hanzi, pinyin: c.pinyin || "", emoji: c.emoji || "", audio_url: c.audio_url || null,
+      hanzi: c.hanzi, pinyin: c.pinyin || "", emoji: c.emoji || "",
+      audio_url: c.audio_url || null, audio_by: c.audio_by || null,
     })));
     setDirty(false);
   }, [lesson, chars, charsFor]);
 
   /* ---------------- 录音 ---------------- */
   const [recIdx, setRecIdx] = useState(null);
+  const [pendingRec, setPendingRec] = useState(null);   // 待确认覆盖的那一行
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -65,25 +68,17 @@ export default function ContentSettings({
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       chunksRef.current = [];
-      /* 能录 mp4 就录 mp4。默认格式在电脑 Chrome 上是 webm，而 Safari 和
-         iPhone 放不了 webm 音频 —— 老师在电脑上录的音，孩子在 iPad/iPhone
-         上就成了哑的，退回机器朗读，听着像「录音没生效」。
-         mp4 两边都能放，录音也会进共享库给别的班用，所以格式必须通用。 */
-      const want = ["audio/mp4", "audio/mp4;codecs=mp4a.40.2"]
-        .find((t) => window.MediaRecorder.isTypeSupported && window.MediaRecorder.isTypeSupported(t));
+      const want = pickRecorderMime();
       const mr = new window.MediaRecorder(stream, want ? { mimeType: want } : undefined);
       mr.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunksRef.current.push(ev.data); };
       mr.onstop = async () => {
-        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+        const raw = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
         try {
-          /* 后缀和 content-type 都跟着录出来的实际格式走。
-             iPhone 的 MediaRecorder 出的是 audio/mp4，写死成 .webm /
-             audio/webm 的话 Safari 直接放不出来（它根本不支持 webm 音频）。 */
+          /* 录成什么格式都收，但存进去之前统一成到处都放得出的格式 ——
+             这段录音全站共用，不能只在录它的那台设备上能放。 */
+          const blob = await toPlayableBlob(raw);
           const type = (blob.type || "audio/webm").split(";")[0];
-          const ext = type.includes("mp4") ? "m4a"
-            : type.includes("ogg") ? "ogg"
-            : type.includes("wav") ? "wav" : "webm";
-          const fileName = `audio_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${ext}`;
+          const fileName = `audio_${Date.now()}_${Math.random().toString(36).slice(2, 9)}.${extFor(type)}`;
           const { data, error } = await supabase.storage
             .from("lesson_audios")
             .upload(fileName, blob, { contentType: type });
@@ -95,7 +90,9 @@ export default function ContentSettings({
             .from("lesson_audios")
             .getPublicUrl(data.path);
 
-          setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, audio_url: urlData.publicUrl } : r)));
+          setRows((prev) => prev.map((r, i) => (
+            i === idx ? { ...r, audio_url: urlData.publicUrl, audio_by: null, reRecorded: true } : r
+          )));
           setDirty(true);
           pushToast("录好了，记得点保存 ✅");
         } catch (err) {
@@ -297,37 +294,36 @@ export default function ContentSettings({
               placeholder="🖼️"
               style={{ ...inputStyle, width: 60, textAlign: "center" }}
             />
+            {/* 录音是全站共用的，一个字只有一段，重录会盖掉所有班级听到的那段。
+                所以有录音时先给试听 + 「重录」，别让人一按麦克风就覆盖掉。 */}
             {recIdx === i ? (
               <button onClick={stopRec} style={{
                 minHeight: 44, padding: "0 10px", borderRadius: 10, border: "none",
                 background: C.red, color: "#fff", fontWeight: 700, cursor: "pointer",
               }}>⏹ 停</button>
+            ) : r.audio_url ? (
+              <>
+                <button onClick={() => playPreview(r.audio_url)} title="听听现在这段" style={{
+                  minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.bamboo}`,
+                  background: "#fff", cursor: "pointer", fontSize: 16,
+                }}>▶️ 试听</button>
+                <button onClick={() => setPendingRec(i)} title="盖掉现在这段，重新录" style={{
+                  minHeight: 44, padding: "0 10px", borderRadius: 10, border: `2px solid ${C.border}`,
+                  background: "#fff", color: "#8A8276", cursor: "pointer", fontSize: 13, fontWeight: 700,
+                }}>🎤 重录</button>
+                <span style={{
+                  fontSize: 12, color: "#8A8276", fontWeight: 600, padding: "2px 8px",
+                  background: "#F5EFE7", borderRadius: 6, whiteSpace: "nowrap",
+                }}>
+                  {r.reRecorded ? "刚录的（未保存）" : r.audio_by ? `📻 ${r.audio_by}` : "📻 已有录音"}
+                </span>
+              </>
             ) : (
               <button onClick={() => startRec(i)} title="录 3 秒" style={{
-                minHeight: 44, padding: "0 10px", borderRadius: 10,
-                border: `2px solid ${r.audio_url ? C.bamboo : C.border}`,
-                background: "#fff", cursor: "pointer", fontSize: 16,
-              }}>🎤</button>
-            )}
-            {r.audio_url && (
-              <>
-                <button onClick={() => playPreview(r.audio_url)} style={{
-                  minHeight: 44, padding: "0 10px", borderRadius: 10, border: `2px solid ${C.border}`,
-                  background: "#fff", cursor: "pointer", fontSize: 16,
-                }}>▶️</button>
-                {r.audio_source && (
-                  <span style={{
-                    fontSize: 12, color: "#8A8276", fontWeight: 600, padding: "2px 8px",
-                    background: "#F5EFE7", borderRadius: 6,
-                  }}>
-                    {r.audio_source}
-                  </span>
-                )}
-                <button onClick={() => patchRow(i, { audio_url: null })} style={{
-                  minHeight: 44, padding: "0 8px", borderRadius: 10, border: `2px solid ${C.border}`,
-                  background: "#fff", color: "#9C9382", cursor: "pointer", fontSize: 13,
-                }}>清音</button>
-              </>
+                minHeight: 44, padding: "0 12px", borderRadius: 10,
+                border: `2px solid ${C.border}`,
+                background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#8A8276",
+              }}>🎤 录音</button>
             )}
             <span style={{ display: "flex", gap: 2 }}>
               <button onClick={() => moveRow(i, -1)} disabled={i === 0} style={{
@@ -347,6 +343,21 @@ export default function ContentSettings({
           </div>
         ))}
       </div>
+
+      {pendingRec != null && (
+        <ConfirmDialog
+          text={
+            `确定重录「${(rows[pendingRec] || {}).hanzi}」吗？\n\n`
+            + `这个字全站只有一段录音，重录会盖掉现在这段，`
+            + `所有班级的孩子听到的都会变成新录的。\n`
+            + `想留着现在这段就点「不了」。`
+          }
+          confirmLabel="重录"
+          cancelLabel="不了，留着"
+          onCancel={() => setPendingRec(null)}
+          onConfirm={() => { const i = pendingRec; setPendingRec(null); startRec(i); }}
+        />
+      )}
 
       <button onClick={addRow} style={{
         minHeight: 48, padding: "0 16px", borderRadius: 12, border: `2px dashed ${C.bamboo}`,

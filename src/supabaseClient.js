@@ -158,30 +158,31 @@ export async function getClassCharsBrief(classLessonIds) {
   return data || [];
 }
 
-/* 单节课的完整字表（含录音）*/
+/* 单节课的完整字表。
+
+   录音一律来自共享库，按「字」取，不再看本班自己那份 audio_url。
+   一个字全站只有一段录音，谁最后录的就是谁的 —— 这样同一个字在
+   不同班级、不同老师那儿听到的都一样，不会各录各的。
+   （class_lesson_chars.audio_url 是旧模型留下的列，现在不读了。） */
 export async function getClassLessonChars(classLessonId) {
   const { data, error } = await supabase
     .from("class_lesson_chars").select("*").eq("class_lesson_id", classLessonId).order("pos");
   if (error) throw error;
 
-  /* 本班没录音的字，看共享库里别的老师录过没有。
-     注意 class_lesson_chars 里只有 hanzi，没有 characters.id ——
-     所以只能按字去共享库里找，不能拿 char_id。 */
   const rows = data || [];
-  const missing = rows.filter((r) => !r.audio_url).map((r) => r.hanzi);
-  const shared = await getSharedAudioByHanzi(missing);
-  if (shared.size === 0) return rows;
-
+  const shared = await getSharedAudioByHanzi(rows.map((r) => r.hanzi));
   return rows.map((r) => {
-    if (r.audio_url) return r;                       // 本班自己录的优先
     const s = shared.get(r.hanzi);
-    if (!s) return r;
-    return { ...r, audio_url: s.audio_url, audio_source: `📻 ${s.teacher_name} 配音` };
+    return {
+      ...r,
+      audio_url: s ? s.audio_url : null,
+      audio_by: s ? s.teacher_name : null,
+    };
   });
 }
 
-/* 一批汉字 -> 共享录音（每个字取最新的一条）。
-   共享库还没建表时返回空 Map，调用方照常走「没有共享音频」。 */
+/* 一批汉字 -> 共享录音（每个字一条）。
+   共享库还没建表时返回空 Map，调用方照常走「没有录音」。 */
 export async function getSharedAudioByHanzi(hanziList) {
   const out = new Map();
   const want = Array.from(new Set((hanziList || []).filter(Boolean)));
@@ -243,11 +244,10 @@ export async function startClassLesson(classId, lesson, existingLessons) {
   }).select().single();
   if (error) throw error;
 
-  // 别的老师录过的字，选课时就直接带上，不用每个班重录一遍
-  const shared = await getSharedAudioByHanzi((lesson.chars || []).map((c) => c.hanzi));
+  /* 不往本班拷录音 —— 录音按「字」全局共用，读字表时再取。
+     拷一份进来的话，别人之后重录了这个字，这个班还留着旧的。 */
   const rows = (lesson.chars || []).map((c, i) => ({
     class_lesson_id: data.id, hanzi: c.hanzi, pinyin: c.pinyin, emoji: c.emoji, pos: i + 1,
-    audio_url: (shared.get(c.hanzi) || {}).audio_url || null,
   }));
   if (rows.length) {
     const { error: e2 } = await supabase.from("class_lesson_chars").insert(rows);
@@ -281,12 +281,12 @@ export async function saveClassLessonChars(classLessonId, chars) {
     .from("class_lesson_chars").delete().eq("class_lesson_id", classLessonId);
   if (delErr) throw delErr;
   if (!chars.length) return;
+  /* 不存 audio_url —— 录音在共享库里按字存，存这儿会变成过期的影子数据 */
   const rows = chars.map((c, i) => ({
     class_lesson_id: classLessonId,
     hanzi: c.hanzi,
     pinyin: c.pinyin || null,
     emoji: c.emoji || null,
-    audio_url: c.audio_url || null,
     pos: i + 1,
   }));
   const { error } = await supabase.from("class_lesson_chars").insert(rows);
@@ -322,10 +322,13 @@ export async function renameStudentEverywhereRpc(oldName, newName) {
    共享音频（老师可配音，其他班级可复用）
    ============================================================ */
 
+/* 录音入库：一个字一条，后录的直接覆盖前面的。
+   以前是 onConflict "char_id,teacher_name"，每个老师各留一条，
+   同一个字堆好几份，谁生效全看 created_at，不直观也不好清理。 */
 export async function saveSharedAudio(charId, teacherName, audioUrl) {
   const { error } = await supabase.from("shared_audios").upsert(
-    { char_id: charId, teacher_name: teacherName, audio_url: audioUrl },
-    { onConflict: "char_id,teacher_name" }
+    { char_id: charId, teacher_name: teacherName, audio_url: audioUrl, updated_at: new Date().toISOString() },
+    { onConflict: "char_id" }
   );
   if (error) throw error;
 }
