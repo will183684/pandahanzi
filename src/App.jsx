@@ -206,10 +206,19 @@ export default function PandaHanziApp() {
     [charsByLesson]
   );
 
-  const lessonsNewestFirst = useMemo(
-    () => classLessons.slice().sort((a, b) => b.seq - a.seq),
-    [classLessons]
-  );
+  /* 历史记录按课程库的课号排（L1第1课、L1第2课…），不是按上课先后。
+     老师和孩子都是照着课号找课的，按 seq 排看着就是乱的。
+     自建的课没有课号，排最后，按上课先后。 */
+  const lessonsInOrder = useMemo(() => {
+    const noOf = (l) => {
+      const src = curriculum && l.lesson_id != null ? curriculum.lessonById.get(l.lesson_id) : null;
+      return src ? src.lesson_no : Infinity;
+    };
+    return classLessons.slice().sort((a, b) => {
+      const na = noOf(a), nb = noOf(b);
+      return na !== nb ? na - nb : a.seq - b.seq;   // Infinity 相等时落到 seq
+    });
+  }, [classLessons, curriculum]);
 
   /* ---------------- 老师操作 ---------------- */
   const run = useCallback(async (fn, okMsg, errMsg) => {
@@ -399,7 +408,7 @@ export default function PandaHanziApp() {
 
   const archive = archiveOpen ? (
     <ArchivePanel
-      lessons={lessonsNewestFirst} currentId={currentLesson ? currentLesson.id : null}
+      lessons={lessonsInOrder} currentId={currentLesson ? currentLesson.id : null}
       charsOf={charsOf} getProgress={getProgressFor}
       onClose={() => setArchiveOpen(false)} onReview={openReview}
       canDelete={!!session && session.role !== "parent"} onDelete={removeLesson}

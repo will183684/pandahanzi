@@ -3,7 +3,7 @@ import { C, ACTIVITIES } from "../theme";
 import { ConfirmDialog } from "../components/ui";
 
 /* ===================================================================
-   历史记录 —— 本班上过的课，倒序排列，可进入回顾模式重玩。
+   历史记录 —— 本班的课，按课程库的课号排，可进入回顾模式重玩。
    =================================================================== */
 export default function ArchivePanel({ lessons, currentId, charsOf, getProgress, onClose, onReview, canDelete, onDelete }) {
   const [pending, setPending] = useState(null);
