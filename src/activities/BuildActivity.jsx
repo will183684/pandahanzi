@@ -11,26 +11,39 @@ import { BigButton } from "../components/ui";
 export default function BuildActivity({ meta, onDone }) {
   const target = useMemo(() => meta.sentence.split("").filter((c) => c.trim()), [meta.sentence]);
 
-  /* L1 的孩子刚认字，整句空着排太难了 —— 先把第一个字放好，
-     他们照着往下接就行。第一个字最有用：知道句子从哪儿起头。
-     L2 以上照旧全空。 */
-  const giveFirst = (meta.level || 1) <= 1 && target.length > 2;
+  /* 整句空着排对小小孩太难，按级别送一个字：
+       L1  送第一个 —— 刚认字的孩子最难的是「这句话从哪个字起头」，
+           给了开头就能顺着往下接。固定位置，好上手。
+       L2  随机送一个 —— 已经有语序概念了，位置不定反而是个挑战，
+           也不至于每次都一样排腻了。
+       L3+ 全空。
+     三个字以内的句子本来就不难，不送。 */
+  const level = meta.level || 1;
+  const pickGivenIdx = useCallback(() => {
+    if (target.length <= 3) return -1;
+    if (level <= 1) return 0;
+    if (level === 2) return Math.floor(Math.random() * target.length);
+    return -1;
+  }, [target.length, level]);
 
-  const [tiles, setTiles] = useState([]); // {id, ch}
-  const [slots, setSlots] = useState([]); // tileId | null
+  const [tiles, setTiles] = useState([]);   // {id, ch}
+  const [slots, setSlots] = useState([]);   // tileId | null
+  const [givenIdx, setGivenIdx] = useState(-1);   // 送的那个字在第几格，-1 = 没送
   const [shake, setShake] = useState(false);
   const [okFlash, setOkFlash] = useState(false);
 
   const reset = useCallback(() => {
     const all = target.map((ch, i) => ({ id: "t" + i, ch }));
-    const fixed = giveFirst ? all[0] : null;
-    setTiles(shuffled(fixed ? all.slice(1) : all).concat(fixed ? [fixed] : []));
+    const idx = pickGivenIdx();
+    const fixed = idx >= 0 ? all[idx] : null;
+    setGivenIdx(idx);
+    setTiles(shuffled(all.filter((t) => t !== fixed)).concat(fixed ? [fixed] : []));
     const ns = new Array(target.length).fill(null);
-    if (fixed) ns[0] = fixed.id;
+    if (fixed) ns[idx] = fixed.id;
     setSlots(ns);
     setShake(false);
     setOkFlash(false);
-  }, [target, giveFirst]);
+  }, [target, pickGivenIdx]);
   useEffect(() => { reset(); }, [reset]);
 
   const check = useCallback((arr) => {
@@ -63,14 +76,14 @@ export default function BuildActivity({ meta, onDone }) {
   }, [check]);
 
   const returnTile = useCallback((slotIndex) => {
-    if (giveFirst && slotIndex === 0) return;   // 送的那个字收不回来
+    if (slotIndex === givenIdx) return;         // 送的那个字收不回来
     setSlots((prev) => {
       if (!prev[slotIndex]) return prev;
       const ns = prev.slice();
       ns[slotIndex] = null;
       return ns;
     });
-  }, [giveFirst]);
+  }, [givenIdx]);
 
   const tileById = (id) => tiles.find((t) => t.id === id);
   const trayTiles = tiles.filter((t) => !slots.includes(t.id));
@@ -79,9 +92,11 @@ export default function BuildActivity({ meta, onDone }) {
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 22 }}>
       <p style={{ fontSize: 16, color: "#6B6356", textAlign: "center", margin: 0 }}>
         点字把它放进句子里，点放好的字可以收回来
-        {giveFirst && (
+        {givenIdx >= 0 && (
           <span style={{ display: "block", fontSize: 15, color: C.bamboo, fontWeight: 800, marginTop: 4 }}>
-            第一个字已经帮你放好啦，接着往下排 👇
+            {givenIdx === 0
+              ? "第一个字已经帮你放好啦，接着往下排 👇"
+              : "有一个字已经帮你放好啦，其他的排进去 👇"}
           </span>
         )}
       </p>
@@ -90,7 +105,7 @@ export default function BuildActivity({ meta, onDone }) {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
         {slots.map((tid, i) => {
           const tl = tid ? tileById(tid) : null;
-          const given = giveFirst && i === 0;           // 送的那个字：固定住，不能收回
+          const given = i === givenIdx;                 // 送的那个字：固定住，不能收回
           const border = okFlash ? C.bamboo : shake ? C.red : tl ? C.bamboo : "#CFC7B8";
           return (
             <button
