@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { C } from "../theme";
 import { shuffled } from "../utils";
 import { BigButton } from "../components/ui";
@@ -39,16 +39,12 @@ export default function BuildWordActivity({ meta, onDone }) {
       });
       if (ok) {
         setOkFlash(true);
-        /* 分两拍：先把刚点的那个字念完整，停一下，再把整个词连起来念。
-           不能一上来就念整词 —— 孩子点的是「羊」，先听到「小」会懵。
-           中间这一停也是必要的，不然两拍会黏成一句听不出分隔。
+        /* 只念刚点的那个字，不再回头把整个词念一遍。
+           孩子点的是「羊」，紧接着又冒出「小」会打断他 —— 想再听整个词
+           有上面的 🔊，进这个词时也已经念过一遍了。
            念完再翻页；保底 700ms，免得放不出声时一闪而过。 */
         const lastCh = targetChars[targetChars.length - 1];
-        const readAloud = (async () => {
-          await playSequence([lastCh], meta.audioMap);           // 你点的这个字
-          await new Promise((r) => setTimeout(r, 320));
-          await playSequence(targetChars, meta.audioMap);        // 连起来就是这个词
-        })();
+        const readAloud = playSequence([lastCh], meta.audioMap);
         Promise.all([readAloud, new Promise((r) => setTimeout(r, 700))]).then(() => {
           setOkFlash(false);
           if (wi + 1 >= words.length) onDone();
@@ -63,18 +59,22 @@ export default function BuildWordActivity({ meta, onDone }) {
   }, [targetChars, wi, words.length, onDone, buildTiles, meta.audioMap]);
 
   /* 换到下一个词时先念一遍，孩子知道自己在拼什么。
-     用老师录的单字连起来念，缺哪个字才用机器音补。 */
+     用老师录的单字连起来念，缺哪个字才用机器音补。
+
+     只认 word。audioMap 是每次 toMeta 新建的对象，realtime 一刷新
+     身份就变，把它放进依赖会让同一个词从头重念好几遍 —— 每次重念又
+     掐掉上一遍，听着就是「面…面…面包」。录音地址放 ref 里随用随取。 */
+  const audioRef = useRef(meta.audioMap);
+  audioRef.current = meta.audioMap;
   useEffect(() => {
-    if (word) playSequence(word.split(""), meta.audioMap);
+    if (word) playSequence(word.split(""), audioRef.current);
     return stopAudio;
-  }, [word, meta.audioMap]);
+  }, [word]);
 
   const place = useCallback((tileId) => {
     const tl = tiles.find((t) => t.id === tileId);
-    /* 点一个字就念这个字 —— 但填满最后一格时不念。
-       紧接着要把整个词连起来念一遍，这时再念单字，那个字刚起头就被
-       整词的读音接管，听着像「羊…小羊」这样结巴了一下。
-       直接交给整词那一遍，孩子照样听得到这个字。 */
+    /* 点一个字就念这个字。填满最后一格时交给 check 去念（那边会等它
+       念完再翻页），这里不重复念，否则同一个字会被念两次、还互相掐断。 */
     const completes = slots.filter((s) => s === null).length === 1;
     if (tl && !completes) playChar(tl.ch, meta.audioMap);
     setSlots((prev) => {
