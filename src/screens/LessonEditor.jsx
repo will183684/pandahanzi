@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { C } from "../theme";
 import { Card, BigButton } from "../components/ui";
 import {
-  getClassLessonChars, saveClassLessonChars, updateClassLesson, saveSharedAudio,
+  getClassLessonChars, saveClassLessonChars, updateClassLesson, saveSharedAudio, saveWordAudio,
 } from "../supabaseClient";
 import ContentSettings from "./ContentSettings";
 
@@ -36,7 +36,7 @@ export default function LessonEditor({
 
   /* extras：词句里用到、但不在本课字表里的字的新录音。
      它们不进本课字表，只往共享库里存一份录音。 */
-  const saveChars = useCallback(async (rows, extras = []) => {
+  const saveChars = useCallback(async (rows, extras = [], wordAudios = []) => {
     if (!selectedId) return;
     setBusy(true);
     try {
@@ -51,6 +51,11 @@ export default function LessonEditor({
           const ch = charMap.get(row.hanzi);
           if (!row.audio_url || !ch) continue;
           try { await saveSharedAudio(ch.id, session.name, row.audio_url); }
+          catch (e) { sharedFailed = true; }
+        }
+        /* 整词录音单独一张表（词 -> 录音），不挂在字上 */
+        for (const w of wordAudios) {
+          try { await saveWordAudio(w.word, session.name, w.audio_url); }
           catch (e) { sharedFailed = true; }
         }
       }
@@ -74,12 +79,19 @@ export default function LessonEditor({
     }
   }, [selectedId, pushToast, onAfterSave]);
 
+  /* 这一课在课程库里是第几课 —— 决定拼词语的提示档位，也决定要不要
+     要求整词录音。老师自建的课没有课号。 */
+  const lessonNoOf = useCallback((l) => {
+    const src = curriculum && l && l.lesson_id != null ? curriculum.lessonById.get(l.lesson_id) : null;
+    return src ? src.lesson_no : null;
+  }, [curriculum]);
+
   /* ---------------- 选中了某节课：直接进编辑 ---------------- */
   if (selected) {
     return (
       <ContentSettings
         editMode
-        lesson={selected} chars={chars} charsFor={charsFor}
+        lesson={selected} lessonNo={lessonNoOf(selected)} chars={chars} charsFor={charsFor}
         busy={busy} pushToast={pushToast}
         onSaveLesson={saveLesson} onSaveChars={saveChars}
         onBack={() => setSelectedId(null)}
@@ -91,12 +103,9 @@ export default function LessonEditor({
      按课程库的顺序排（L1第1课、L1第2课…），不是按上课先后 ——
      老师是照着课号找课的，按 seq 排看着就是乱的。
      自建的课（没有 lesson_id）排在最后，按上课先后。 */
-  const lessonNoOf = (l) => {
-    const src = curriculum && l.lesson_id != null ? curriculum.lessonById.get(l.lesson_id) : null;
-    return src ? src.lesson_no : Infinity;
-  };
+  const sortNo = (l) => lessonNoOf(l) ?? Infinity;
   const list = classLessons.slice().sort((a, b) => {
-    const na = lessonNoOf(a), nb = lessonNoOf(b);
+    const na = sortNo(a), nb = sortNo(b);
     if (na !== nb) return na - nb;      // Infinity 相等时落到 seq
     return a.seq - b.seq;
   });

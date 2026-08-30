@@ -38,7 +38,7 @@ export function sourceLesson(classLesson, curriculum) {
    extraAudio：词语和句子里用到、但不在本课字表里的字的录音（汉字 -> url）。
    没有它的话，「小羊」的「小」不在本课 10 个字里，即使老师录过也取不到，
    孩子听到的是机器音。录音本来就是按字全局共用的，字表内外一视同仁。 */
-export function toMeta(classLesson, chars, curriculum, extraAudio) {
+export function toMeta(classLesson, chars, curriculum, extraAudio, wordAudio) {
   if (!classLesson) return null;
   const list = chars || [];
   const src = sourceLesson(classLesson, curriculum);
@@ -60,6 +60,8 @@ export function toMeta(classLesson, chars, curriculum, extraAudio) {
     sentence: classLesson.sentence || "",
     emojiMap,
     audioMap,
+    /* 词 -> 老师念的整词录音。没有的词就退回单字拼接。 */
+    wordAudioMap: wordAudio || {},
     distractors: buildDistractors(list, classLesson, curriculum),
     /* 课程库来源：用来显示「L3 启蒙进阶 · 第2课」。老师自建的课为 null。 */
     level: src ? src.level : null,

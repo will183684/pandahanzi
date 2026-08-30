@@ -16,12 +16,22 @@ export default function BuildWordActivity({ meta, onDone }) {
   const targetChars = useMemo(() => word.split(""), [word]);
 
   /* 提示随课程推进递减：
-       第 1-10 课（L1）   整个词都写出来 —— 刚认字，先照着拼
-       第 11-20 课（L2）  只留第一个字，其余靠听
-       第 21 课起（L3+）  一个字都不给，纯听力
+       第 1-10 课（L1）      整个词都写出来 —— 刚认字，先照着拼
+       第 11-30 课（L2-L3）  只留第一个字，其余靠听
+       第 31 课起（L4+）     一个字都不给，纯听力
+     撤掉字面提示的这一刀落在 L3/L4 之间，正是课程自己的大类边界：
+     L1-L3 是「启蒙识字」，L4 起进「基础阅读」—— 开始阅读了才靠听。
      老师自建的课没有课号，按最容易的来。 */
   const lessonNo = meta.lessonNo || 1;
-  const hint = lessonNo <= 10 ? "full" : lessonNo <= 20 ? "partial" : "none";
+  const hint = lessonNo <= 10 ? "full" : lessonNo <= 30 ? "partial" : "none";
+
+  /* 念一个词：老师录过整词就放整词，否则退回单字接起来念。
+     单字拼接没有连读和变调（「你好」实际念 ní hǎo），有字看时无所谓，
+     纯听力档孩子就是照着这个音去记的，所以那一档要求整词录音。 */
+  const sayWord = useCallback((w) => {
+    const url = (meta.wordAudioMap || {})[w];
+    return url ? playSequence([w], { [w]: url }) : playSequence(w.split(""), meta.audioMap);
+  }, [meta.wordAudioMap, meta.audioMap]);
 
   const [tiles, setTiles] = useState([]);
   const [slots, setSlots] = useState([]);
@@ -72,10 +82,10 @@ export default function BuildWordActivity({ meta, onDone }) {
      只认 word。audioMap 是每次 toMeta 新建的对象，realtime 一刷新
      身份就变，把它放进依赖会让同一个词从头重念好几遍 —— 每次重念又
      掐掉上一遍，听着就是「面…面…面包」。录音地址放 ref 里随用随取。 */
-  const audioRef = useRef(meta.audioMap);
-  audioRef.current = meta.audioMap;
+  const sayRef = useRef(sayWord);
+  sayRef.current = sayWord;
   useEffect(() => {
-    if (word) playSequence(word.split(""), audioRef.current);
+    if (word) sayRef.current(word);
     return stopAudio;
   }, [word]);
 
@@ -130,7 +140,7 @@ export default function BuildWordActivity({ meta, onDone }) {
           </span>
         </span>
         <button
-          onClick={() => playSequence(word.split(""), meta.audioMap)}
+          onClick={() => sayWord(word)}
           title="再听一遍"
           style={{
             minHeight: 44, minWidth: 44, borderRadius: 12, border: `2px solid ${C.bamboo}`,

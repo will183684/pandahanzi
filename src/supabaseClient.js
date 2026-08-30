@@ -325,6 +325,32 @@ export async function renameStudentEverywhereRpc(oldName, newName) {
 /* 录音入库：一个字一条，后录的直接覆盖前面的。
    以前是 onConflict "char_id,teacher_name"，每个老师各留一条，
    同一个字堆好几份，谁生效全看 created_at，不直观也不好清理。 */
+/* ---- 整词录音 ----
+   单字接起来播不等于真实语流（「你好」实际念 ní hǎo），纯听力档要用
+   老师直接念的整词。一个词一条，后录覆盖前录，和单字录音同一套规矩。 */
+export async function getWordAudios(words) {
+  const out = new Map();
+  const want = Array.from(new Set((words || []).filter(Boolean)));
+  if (!want.length) return out;
+  try {
+    const { data, error } = await supabase
+      .from("shared_word_audios").select("word,teacher_name,audio_url").in("word", want);
+    if (error) throw error;
+    (data || []).forEach((r) => out.set(r.word, r));
+  } catch (e) {
+    return out;                       // 表还没建就当没有整词录音
+  }
+  return out;
+}
+
+export async function saveWordAudio(word, teacherName, audioUrl) {
+  const { error } = await supabase.from("shared_word_audios").upsert(
+    { word, teacher_name: teacherName, audio_url: audioUrl, updated_at: new Date().toISOString() },
+    { onConflict: "word" }
+  );
+  if (error) throw error;
+}
+
 export async function saveSharedAudio(charId, teacherName, audioUrl) {
   const { error } = await supabase.from("shared_audios").upsert(
     { char_id: charId, teacher_name: teacherName, audio_url: audioUrl, updated_at: new Date().toISOString() },

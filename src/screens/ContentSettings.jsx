@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { C } from "../theme";
 import { Card, BigButton, ConfirmDialog } from "../components/ui";
-import { supabase, getSharedAudioByHanzi } from "../supabaseClient";
+import { supabase, getSharedAudioByHanzi, getWordAudios } from "../supabaseClient";
 import { pickRecorderMime, toPlayableBlob, extFor } from "../recordingFormat";
 
 /* ===================================================================
@@ -10,7 +10,7 @@ import { pickRecorderMime, toPlayableBlob, extFor } from "../recordingFormat";
    所有改动只落在本班的副本上，不影响课程库。
    =================================================================== */
 export default function ContentSettings({
-  lesson, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onBack, pushToast, busy,
+  lesson, lessonNo, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onBack, pushToast, busy,
   /* editMode：从「课程编辑」进来的，只改内容 —— 藏掉「换一课 / 完成本课」
      这些会动排课状态的按钮。 */
   editMode = false,
@@ -126,6 +126,8 @@ export default function ContentSettings({
     setRows((prev) => prev.map((r, k) => (
       k === i ? { ...r, audio_url: url, audio_by: null, reRecorded: true } : r
     )));
+  const setWordAudio_ = (w) => (url) =>
+    setWordAudio((prev) => ({ ...prev, [w]: { audio_url: url, audio_by: null, reRecorded: true } }));
   const setExtraAudio_ = (ch) => (url) =>
     setExtraAudio((prev) => ({ ...prev, [ch]: { audio_url: url, audio_by: null, reRecorded: true } }));
 
@@ -174,6 +176,39 @@ export default function ContentSettings({
   }, [vocabStr, sentence, rows]);
 
   const [extraAudio, setExtraAudio] = useState({});   // 汉字 -> {audio_url, audio_by}
+
+  /* 整词录音。第 31 课（L4）起「拼词语」是纯听力，孩子看不到字，
+     只能靠听 —— 这时必须是老师念的整词，单字接起来没有连读和变调。 */
+  const wordList = useMemo(
+    () => vocabStr.split(/\s+/).map((w) => w.trim()).filter(Boolean),
+    [vocabStr]
+  );
+  const needWordAudio = !!(lessonNo && lessonNo >= 31);   // L4 起是纯听力
+  const [wordAudio, setWordAudio] = useState({});   // 词 -> {audio_url, audio_by}
+  useEffect(() => {
+    const need = wordList.filter((w) => !(w in wordAudio));
+    if (!need.length) return;
+    let alive = true;
+    getWordAudios(need).then((m) => {
+      if (!alive) return;
+      setWordAudio((prev) => {
+        const next = { ...prev };
+        need.forEach((w) => {
+          const v = m.get(w);
+          next[w] = v ? { audio_url: v.audio_url, audio_by: v.teacher_name } : { audio_url: null };
+        });
+        return next;
+      });
+    }).catch(() => {
+      if (!alive) return;
+      setWordAudio((prev) => {
+        const next = { ...prev };
+        need.forEach((w) => { if (!(w in next)) next[w] = { audio_url: null }; });
+        return next;
+      });
+    });
+    return () => { alive = false; };
+  }, [wordList, wordAudio]);
 
   /* 这些字已经有人录过没有？查一次共享库 */
   useEffect(() => {
@@ -231,7 +266,10 @@ export default function ContentSettings({
     const extras = Object.entries(extraAudio)
       .filter(([, v]) => v && v.audio_url && v.reRecorded)
       .map(([hanzi, v]) => ({ hanzi, audio_url: v.audio_url }));
-    onSaveChars(clean, extras);
+    const wordAudios = Object.entries(wordAudio)
+      .filter(([, v]) => v && v.audio_url && v.reRecorded)
+      .map(([word, v]) => ({ word, audio_url: v.audio_url }));
+    onSaveChars(clean, extras, wordAudios);
     onSaveLesson({
       title: title.trim() || lesson.title,
       vocab: vocabStr.split(/\s+/).filter(Boolean),
@@ -433,6 +471,76 @@ export default function ContentSettings({
           <input style={{ ...inputStyle, width: "100%" }} value={sentence} placeholder="例如：山上有大树"
             onChange={(ev) => { setSentence(ev.target.value); setDirty(true); }} />
         </div>
+
+        {/* 整词录音。L4 起「拼词语」孩子看不到字，只能靠听，
+            这时必须是老师念的整词 —— 单字接起来没有连读和变调。 */}
+        {wordList.length > 0 && (
+          <div style={{
+            background: needWordAudio ? "#FFF1F0" : "#FFFBF2",
+            border: `2px solid ${needWordAudio ? C.red + "66" : C.gold}`,
+            borderRadius: 14, padding: 12,
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 2 }}>
+              🎤 整词录音（{wordList.length} 个词）
+              {needWordAudio && <span style={{ color: C.red, marginLeft: 6 }}>· 这一课必须录</span>}
+            </div>
+            <p style={{ fontSize: 13, color: "#8A8276", margin: "0 0 10px" }}>
+              {needWordAudio
+                ? "第 31 课起「拼词语」不给字看，孩子只能靠听。请把每个词整个念一遍 —— 单字接起来没有连读和变调（「你好」实际念 ní hǎo），孩子会照着学错。"
+                : "录了整词，「拼词语」就放这一段；没录就用单字接起来念。第 31 课（L4）起是纯听力，那时必须录。"}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {wordList.map((w) => {
+                const a = wordAudio[w] || {};
+                return (
+                  <div key={w} style={{
+                    display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+                    background: "#fff", border: `2px solid ${C.border}`, borderRadius: 10, padding: "6px 10px",
+                  }}>
+                    <span style={{ fontSize: 22, fontWeight: 800, minWidth: 64 }}>{w}</span>
+                    {recKey === `word:${w}` ? (
+                      <button onClick={stopRec} style={{
+                        minHeight: 44, padding: "0 10px", borderRadius: 10, border: "none",
+                        background: C.red, color: "#fff", fontWeight: 700, cursor: "pointer",
+                      }}>⏹ 停</button>
+                    ) : a.audio_url ? (
+                      <>
+                        <button onClick={() => playPreview(a.audio_url)} style={{
+                          minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.bamboo}`,
+                          background: "#fff", cursor: "pointer", fontSize: 16,
+                        }}>▶️ 试听</button>
+                        <button
+                          onClick={() => setPendingRec({ key: `word:${w}`, ch: w, onGot: setWordAudio_(w) })}
+                          style={{
+                            minHeight: 44, padding: "0 10px", borderRadius: 10, border: `2px solid ${C.border}`,
+                            background: "#fff", color: "#8A8276", cursor: "pointer", fontSize: 13, fontWeight: 700,
+                          }}>🎤 重录</button>
+                        <span style={{
+                          fontSize: 12, color: "#8A8276", fontWeight: 600, padding: "2px 8px",
+                          background: "#F5EFE7", borderRadius: 6, whiteSpace: "nowrap",
+                        }}>
+                          {a.reRecorded ? "刚录的（未保存）" : a.audio_by ? `📻 ${a.audio_by}` : "📻 已有录音"}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => startRec(`word:${w}`, setWordAudio_(w))} style={{
+                          minHeight: 44, padding: "0 12px", borderRadius: 10,
+                          border: `2px solid ${needWordAudio ? C.red : C.gold}`,
+                          background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 700,
+                          color: needWordAudio ? C.red : "#8a6d12",
+                        }}>🎤 录整个词</button>
+                        <span style={{ fontSize: 12, color: needWordAudio ? C.red : "#B7AE9F" }}>
+                          {needWordAudio ? "还没录，孩子听不出这个词" : "还没录，会用单字接起来念"}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* 词句里用到、但不在本课字表里的字。孩子做「拼词语」「拼句子」时
             照样会听到这些字，可本课字表里没有它们，老师就没地方录。 */}

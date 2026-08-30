@@ -4,7 +4,7 @@ import {
   getCurriculum, getClassLessons, getClassCharsBrief, getClassLessonChars,
   startClassLesson, updateClassLesson, completeClassLesson, saveClassLessonChars,
   getClassProgress, markProgress, getProfiles, saveProfile, deleteClassLesson,
-  saveSharedAudio, getCharSharedAudios, getSharedAudioByHanzi,
+  saveSharedAudio, getCharSharedAudios, getSharedAudioByHanzi, getWordAudios,
 } from "./supabaseClient";
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
@@ -185,6 +185,22 @@ export default function PandaHanziApp() {
     ? (viewLesson.vocab || []).join("") + "|" + (viewLesson.sentence || "")
     : "";
   const [extraAudio, setExtraAudio] = useState({});
+  /* 整词录音：L4 起是纯听力，必须用老师念的整词，不能拿单字接 */
+  const [wordAudio, setWordAudio] = useState({});
+  useEffect(() => {
+    const words = (viewLesson && viewLesson.vocab) || [];
+    if (!words.length) { setWordAudio({}); return undefined; }
+    let alive = true;
+    getWordAudios(words).then((m) => {
+      if (!alive) return;
+      const out = {};
+      m.forEach((v, w) => { if (v.audio_url) out[w] = v.audio_url; });
+      setWordAudio(out);
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vocabKey, charsTick]);
+
   useEffect(() => {
     const want = Array.from(new Set(vocabKey.split("").filter((c) => /[\u4e00-\u9fa5]/.test(c))));
     if (!want.length) { setExtraAudio({}); return undefined; }
@@ -201,8 +217,8 @@ export default function PandaHanziApp() {
   }, [vocabKey, charsTick]);
 
   const viewMeta = useMemo(
-    () => toMeta(viewLesson, viewChars, curriculum, extraAudio),
-    [viewLesson, viewChars, curriculum, extraAudio]
+    () => toMeta(viewLesson, viewChars, curriculum, extraAudio, wordAudio),
+    [viewLesson, viewChars, curriculum, extraAudio, wordAudio]
   );
 
   const who = session && session.role === "parent" ? session.name : null;
