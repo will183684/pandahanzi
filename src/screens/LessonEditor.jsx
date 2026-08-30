@@ -34,7 +34,9 @@ export default function LessonEditor({
     return () => { alive = false; };
   }, [selectedId, pushToast]);
 
-  const saveChars = useCallback(async (rows) => {
+  /* extras：词句里用到、但不在本课字表里的字的新录音。
+     它们不进本课字表，只往共享库里存一份录音。 */
+  const saveChars = useCallback(async (rows, extras = []) => {
     if (!selectedId) return;
     setBusy(true);
     try {
@@ -45,7 +47,7 @@ export default function LessonEditor({
       let sharedFailed = false;
       if (curriculum && session && session.role === "teacher" && session.name) {
         const charMap = new Map(curriculum.characters.map((c) => [c.hanzi, c]));
-        for (const row of rows) {
+        for (const row of [...rows, ...extras]) {
           const ch = charMap.get(row.hanzi);
           if (!row.audio_url || !ch) continue;
           try { await saveSharedAudio(ch.id, session.name, row.audio_url); }

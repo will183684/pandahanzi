@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { C } from "../theme";
 import { Card, BigButton, ConfirmDialog } from "../components/ui";
-import { supabase } from "../supabaseClient";
+import { supabase, getSharedAudioByHanzi } from "../supabaseClient";
 import { pickRecorderMime, toPlayableBlob, extFor } from "../recordingFormat";
 
 /* ===================================================================
@@ -45,7 +45,7 @@ export default function ContentSettings({
   }, [lesson, chars, charsFor]);
 
   /* ---------------- 录音 ---------------- */
-  const [recIdx, setRecIdx] = useState(null);
+  const [recKey, setRecKey] = useState(null);   // 正在录哪一个（"row:2" / "extra:中"）
   const [pendingRec, setPendingRec] = useState(null);   // 待确认覆盖的那一行
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -59,7 +59,7 @@ export default function ContentSettings({
     streamRef.current = null;
   };
 
-  const startRec = async (idx) => {
+  const startRec = async (key, onGot) => {
     try {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia ||
           typeof window.MediaRecorder === "undefined") {
@@ -90,9 +90,7 @@ export default function ContentSettings({
             .from("lesson_audios")
             .getPublicUrl(data.path);
 
-          setRows((prev) => prev.map((r, i) => (
-            i === idx ? { ...r, audio_url: urlData.publicUrl, audio_by: null, reRecorded: true } : r
-          )));
+          onGot(urlData.publicUrl);
           setDirty(true);
           pushToast("录好了，记得点保存 ✅");
         } catch (err) {
@@ -107,26 +105,34 @@ export default function ContentSettings({
           console.error("Audio upload failed:", err);
         }
         stopTracks();
-        setRecIdx(null);
+        setRecKey(null);
       };
       recorderRef.current = mr;
       mr.start();
-      setRecIdx(idx);
+      setRecKey(key);
       if (autoStopRef.current) clearTimeout(autoStopRef.current);
       autoStopRef.current = setTimeout(() => {
         try { if (mr.state === "recording") mr.stop(); } catch (e) { /* ignore */ }
       }, 3000);
     } catch (err) {
       stopTracks();
-      setRecIdx(null);
+      setRecKey(null);
       pushToast("没法录音，请允许使用麦克风 🎤");
     }
   };
 
+  /* 录完往哪儿放 */
+  const setRowAudio = (i) => (url) =>
+    setRows((prev) => prev.map((r, k) => (
+      k === i ? { ...r, audio_url: url, audio_by: null, reRecorded: true } : r
+    )));
+  const setExtraAudio_ = (ch) => (url) =>
+    setExtraAudio((prev) => ({ ...prev, [ch]: { audio_url: url, audio_by: null, reRecorded: true } }));
+
   const stopRec = () => {
     if (autoStopRef.current) clearTimeout(autoStopRef.current);
     try { if (recorderRef.current && recorderRef.current.state === "recording") recorderRef.current.stop(); }
-    catch (e) { setRecIdx(null); }
+    catch (e) { setRecKey(null); }
   };
 
   const playPreview = (url) => {
@@ -153,6 +159,49 @@ export default function ContentSettings({
     stopTracks();
   }, []);
 
+  /* 词语和句子里可能用到别的课的字（比如本课有「午」，词语「中午」还要
+     一个「中」）。那些字不在本课字表里，老师就没地方录 —— 单独列出来。
+     录音是按字全局共用的，在哪一课录都一样。 */
+  const extraChars = useMemo(() => {
+    const inLesson = new Set(rows.map((r) => (r.hanzi || "").trim()).filter(Boolean));
+    const out = [];
+    (vocabStr + sentence).split("").forEach((ch) => {
+      if (!/[\u4e00-\u9fa5]/.test(ch)) return;      // 空格标点跳过
+      if (inLesson.has(ch) || out.includes(ch)) return;
+      out.push(ch);
+    });
+    return out;
+  }, [vocabStr, sentence, rows]);
+
+  const [extraAudio, setExtraAudio] = useState({});   // 汉字 -> {audio_url, audio_by}
+
+  /* 这些字已经有人录过没有？查一次共享库 */
+  useEffect(() => {
+    const need = extraChars.filter((ch) => !(ch in extraAudio));
+    if (!need.length) return;
+    let alive = true;
+    getSharedAudioByHanzi(need).then((m) => {
+      if (!alive) return;
+      setExtraAudio((prev) => {
+        const next = { ...prev };
+        need.forEach((ch) => {
+          const s2 = m.get(ch);
+          next[ch] = s2 ? { audio_url: s2.audio_url, audio_by: s2.teacher_name } : { audio_url: null };
+        });
+        return next;
+      });
+    }).catch(() => {
+      /* 查失败也要占个位，否则 need 一直非空，每次渲染都重查一遍 */
+      if (!alive) return;
+      setExtraAudio((prev) => {
+        const next = { ...prev };
+        need.forEach((ch) => { if (!(ch in next)) next[ch] = { audio_url: null }; });
+        return next;
+      });
+    });
+    return () => { alive = false; };
+  }, [extraChars, extraAudio]);
+
   /* ---------------- 字表编辑 ---------------- */
   const patchRow = (i, patch) => {
     setRows((prev) => prev.map((r, k) => (k === i ? { ...r, ...patch } : r)));
@@ -178,7 +227,11 @@ export default function ContentSettings({
     if (clean.length === 0) { pushToast("至少留一个字"); return; }
     const dupe = clean.map((r) => r.hanzi).find((h, i, a) => a.indexOf(h) !== i);
     if (dupe) { pushToast(`「${dupe}」重复了，请删掉一个`); return; }
-    onSaveChars(clean);
+    /* 额外字只有录音要存，不进本课字表 */
+    const extras = Object.entries(extraAudio)
+      .filter(([, v]) => v && v.audio_url && v.reRecorded)
+      .map(([hanzi, v]) => ({ hanzi, audio_url: v.audio_url }));
+    onSaveChars(clean, extras);
     onSaveLesson({
       title: title.trim() || lesson.title,
       vocab: vocabStr.split(/\s+/).filter(Boolean),
@@ -296,7 +349,7 @@ export default function ContentSettings({
             />
             {/* 录音是全站共用的，一个字只有一段，重录会盖掉所有班级听到的那段。
                 所以有录音时先给试听 + 「重录」，别让人一按麦克风就覆盖掉。 */}
-            {recIdx === i ? (
+            {recKey === `row:${i}` ? (
               <button onClick={stopRec} style={{
                 minHeight: 44, padding: "0 10px", borderRadius: 10, border: "none",
                 background: C.red, color: "#fff", fontWeight: 700, cursor: "pointer",
@@ -307,7 +360,7 @@ export default function ContentSettings({
                   minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.bamboo}`,
                   background: "#fff", cursor: "pointer", fontSize: 16,
                 }}>▶️ 试听</button>
-                <button onClick={() => setPendingRec(i)} title="盖掉现在这段，重新录" style={{
+                <button onClick={() => setPendingRec({ key: `row:${i}`, ch: r.hanzi, onGot: setRowAudio(i) })} title="盖掉现在这段，重新录" style={{
                   minHeight: 44, padding: "0 10px", borderRadius: 10, border: `2px solid ${C.border}`,
                   background: "#fff", color: "#8A8276", cursor: "pointer", fontSize: 13, fontWeight: 700,
                 }}>🎤 重录</button>
@@ -319,7 +372,7 @@ export default function ContentSettings({
                 </span>
               </>
             ) : (
-              <button onClick={() => startRec(i)} title="录 3 秒" style={{
+              <button onClick={() => startRec(`row:${i}`, setRowAudio(i))} title="录 3 秒" style={{
                 minHeight: 44, padding: "0 12px", borderRadius: 10,
                 border: `2px solid ${C.border}`,
                 background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#8A8276",
@@ -344,10 +397,10 @@ export default function ContentSettings({
         ))}
       </div>
 
-      {pendingRec != null && (
+      {pendingRec && (
         <ConfirmDialog
           text={
-            `确定重录「${(rows[pendingRec] || {}).hanzi}」吗？\n\n`
+            `确定重录「${pendingRec.ch}」吗？\n\n`
             + `这个字全站只有一段录音，重录会盖掉现在这段，`
             + `所有班级的孩子听到的都会变成新录的。\n`
             + `想留着现在这段就点「不了」。`
@@ -355,7 +408,7 @@ export default function ContentSettings({
           confirmLabel="重录"
           cancelLabel="不了，留着"
           onCancel={() => setPendingRec(null)}
-          onConfirm={() => { const i = pendingRec; setPendingRec(null); startRec(i); }}
+          onConfirm={() => { const p = pendingRec; setPendingRec(null); startRec(p.key, p.onGot); }}
         />
       )}
 
@@ -380,6 +433,68 @@ export default function ContentSettings({
           <input style={{ ...inputStyle, width: "100%" }} value={sentence} placeholder="例如：山上有大树"
             onChange={(ev) => { setSentence(ev.target.value); setDirty(true); }} />
         </div>
+
+        {/* 词句里用到、但不在本课字表里的字。孩子做「拼词语」「拼句子」时
+            照样会听到这些字，可本课字表里没有它们，老师就没地方录。 */}
+        {extraChars.length > 0 && (
+          <div style={{
+            background: "#FFFBF2", border: `2px solid ${C.gold}`, borderRadius: 14, padding: 12,
+          }}>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 2 }}>
+              🎤 词句里用到的其他字（{extraChars.length} 个）
+            </div>
+            <p style={{ fontSize: 13, color: "#8A8276", margin: "0 0 10px" }}>
+              这些字不在本课字表里，但「拼词语」「拼句子」会念到。没录音的会用机器音，
+              录一下就变成真人声。录音全站共用，在哪一课录都一样。
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {extraChars.map((ch) => {
+                const a = extraAudio[ch] || {};
+                return (
+                  <div key={ch} style={{
+                    display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+                    background: "#fff", border: `2px solid ${C.border}`, borderRadius: 10, padding: "6px 10px",
+                  }}>
+                    <span style={{ fontSize: 26, fontWeight: 800, width: 40, textAlign: "center" }}>{ch}</span>
+                    {recKey === `extra:${ch}` ? (
+                      <button onClick={stopRec} style={{
+                        minHeight: 44, padding: "0 10px", borderRadius: 10, border: "none",
+                        background: C.red, color: "#fff", fontWeight: 700, cursor: "pointer",
+                      }}>⏹ 停</button>
+                    ) : a.audio_url ? (
+                      <>
+                        <button onClick={() => playPreview(a.audio_url)} style={{
+                          minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.bamboo}`,
+                          background: "#fff", cursor: "pointer", fontSize: 16,
+                        }}>▶️ 试听</button>
+                        <button
+                          onClick={() => setPendingRec({ key: `extra:${ch}`, ch, onGot: setExtraAudio_(ch) })}
+                          style={{
+                            minHeight: 44, padding: "0 10px", borderRadius: 10, border: `2px solid ${C.border}`,
+                            background: "#fff", color: "#8A8276", cursor: "pointer", fontSize: 13, fontWeight: 700,
+                          }}>🎤 重录</button>
+                        <span style={{
+                          fontSize: 12, color: "#8A8276", fontWeight: 600, padding: "2px 8px",
+                          background: "#F5EFE7", borderRadius: 6, whiteSpace: "nowrap",
+                        }}>
+                          {a.reRecorded ? "刚录的（未保存）" : a.audio_by ? `📻 ${a.audio_by}` : "📻 已有录音"}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => startRec(`extra:${ch}`, setExtraAudio_(ch))} style={{
+                          minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.gold}`,
+                          background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#8a6d12",
+                        }}>🎤 录音</button>
+                        <span style={{ fontSize: 12, color: "#B7AE9F" }}>还没人录，现在是机器音</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <p style={{ fontSize: 12, color: "#9C9382", margin: 0 }}>
           干扰字（「找一找」用）现在从同级别的字里自动取，不用填。
