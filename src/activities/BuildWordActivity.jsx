@@ -39,14 +39,17 @@ export default function BuildWordActivity({ meta, onDone }) {
       });
       if (ok) {
         setOkFlash(true);
-        /* 拼对了把整个词念一遍，念完再翻到下一个词。
-           以前是固定等 700ms 就翻页，翻页又触发下一个词的读音，把这一遍
-           拦腰截断 —— 听着就是尾音没了、冒出半个音。现在等它真的念完。
-           同时保底 700ms，免得放不出声时一闪而过。 */
-        Promise.all([
-          playSequence(targetChars, meta.audioMap),
-          new Promise((r) => setTimeout(r, 700)),
-        ]).then(() => {
+        /* 分两拍：先把刚点的那个字念完整，停一下，再把整个词连起来念。
+           不能一上来就念整词 —— 孩子点的是「羊」，先听到「小」会懵。
+           中间这一停也是必要的，不然两拍会黏成一句听不出分隔。
+           念完再翻页；保底 700ms，免得放不出声时一闪而过。 */
+        const lastCh = targetChars[targetChars.length - 1];
+        const readAloud = (async () => {
+          await playSequence([lastCh], meta.audioMap);           // 你点的这个字
+          await new Promise((r) => setTimeout(r, 320));
+          await playSequence(targetChars, meta.audioMap);        // 连起来就是这个词
+        })();
+        Promise.all([readAloud, new Promise((r) => setTimeout(r, 700))]).then(() => {
           setOkFlash(false);
           if (wi + 1 >= words.length) onDone();
           else setWi((p) => p + 1);
