@@ -444,7 +444,7 @@ export default function ContentSettings({
               🎤 词句里用到的其他字（{extraChars.length} 个）
             </div>
             <p style={{ fontSize: 13, color: "#8A8276", margin: "0 0 10px" }}>
-              这些字不在本课字表里，但「拼词语」「拼句子」会念到。没录音的会用机器音，
+              这些字不在本课字表里，但「拼词语」会念到。没录音的会用机器音，
               录一下就变成真人声。录音全站共用，在哪一课录都一样。
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
