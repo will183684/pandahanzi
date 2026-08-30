@@ -133,8 +133,81 @@ export function playChar(ch, audioMap, opts) {
   return speak(ch, opts);
 }
 
+/* ---------------- 连着念一串字 ----------------
+
+   拼词语那种「念整个词」的场合，以前是直接 speak("山水")，机器音。
+   而且前一个字的录音还在放，下一句就 cancel 掉它插进来 —— 听感就是
+   尾音被砍掉、冒出半个音。
+
+   这里改成排队：一个念完再念下一个，中间留一点间隔。有老师录音就用
+   老师的，缺哪个字才用机器音补，这样一个词里能听到真人声。 */
+let seqToken = 0;
+
+const waitFor = (el, ms) => new Promise((done) => {
+  let over = false;
+  const finish = () => { if (over) return; over = true; clearTimeout(t); done(); };
+  const t = setTimeout(finish, ms);      // 兜底：ended 不触发也不会卡死
+  el.addEventListener("ended", finish, { once: true });
+  el.addEventListener("error", finish, { once: true });
+});
+
+/* 放一个字并等它放完。返回 Promise。 */
+function playCharAwait(ch, audioMap, opts) {
+  const url = audioMap && audioMap[ch];
+  if (url) {
+    try {
+      /* 每次新建 —— 复用同一个元素时，前一段的 ended 监听会串到下一段上 */
+      const el = new window.Audio();
+      el.preload = "auto";
+      el.playsInline = true;
+      el.src = url;
+      const p = el.play();
+      if (p && p.catch) p.catch(() => { /* 放不出就当放完了，继续下一个 */ });
+      return waitFor(el, 6000);
+    } catch (e) { /* 落到 TTS */ }
+  }
+  return speakAwait(ch, opts);
+}
+
+/* 念一段并等它念完 */
+function speakAwait(text, opts) {
+  return new Promise((done) => {
+    try {
+      const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
+      if (!synth) { done(); return; }
+      const u = new window.SpeechSynthesisUtterance(text);
+      u.lang = "zh-CN";
+      u.rate = (opts && opts.rate) || 0.45;
+      u.pitch = 0.95;
+      const v = pickVoice();
+      if (v) u.voice = v;
+      let over = false;
+      const finish = () => { if (over) return; over = true; clearTimeout(t); done(); };
+      const t = setTimeout(finish, 6000);
+      u.onend = finish;
+      u.onerror = finish;
+      synth.speak(u);
+      ensureKeepAlive();
+    } catch (e) { done(); }
+  });
+}
+
+/* 依次念完一串字。再调一次会打断上一串。
+   gap：字与字之间的间隔，太短会连成一片，太长听着不像一个词。 */
+export async function playSequence(chars, audioMap, { gap = 140, rate = 0.5 } = {}) {
+  stopAudio();              // 先收尾（它会 ++seqToken 把上一串叫停）
+  const mine = ++seqToken;  // 再领自己的号，顺序反了会把自己也叫停
+  for (let i = 0; i < chars.length; i++) {
+    if (mine !== seqToken) return;               // 被新的一串接管了
+    await playCharAwait(chars[i], audioMap, { rate });
+    if (mine !== seqToken) return;
+    if (i < chars.length - 1) await new Promise((r) => setTimeout(r, gap));
+  }
+}
+
 /* 离开活动时收尾，免得声音继续放。 */
 export function stopAudio() {
+  seqToken++;                                    // 让在跑的队列自己停下
   try { if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; } } catch (e) { /* ignore */ }
   try {
     const synth = typeof window !== "undefined" ? window.speechSynthesis : null;

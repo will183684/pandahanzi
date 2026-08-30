@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { C } from "../theme";
 import { shuffled } from "../utils";
 import { BigButton } from "../components/ui";
-import { playChar, speak, stopAudio } from "../audio";
+import { playChar, playSequence, stopAudio } from "../audio";
 
 /* ===================================================================
    拼词语 (Build the week's vocab words) — alternate game, not currently
@@ -39,27 +39,32 @@ export default function BuildWordActivity({ meta, onDone }) {
       });
       if (ok) {
         setOkFlash(true);
-        /* 拼对了念整词，把字音连起来听。等一下再念 —— 刚点下最后一个字
-           时那个字的音还在放，speak 会把它掐掉。 */
-        setTimeout(() => speak(word, { rate: 0.6 }), 420);
-        setTimeout(() => {
+        /* 拼对了把整个词念一遍，念完再翻到下一个词。
+           以前是固定等 700ms 就翻页，翻页又触发下一个词的读音，把这一遍
+           拦腰截断 —— 听着就是尾音没了、冒出半个音。现在等它真的念完。
+           同时保底 700ms，免得放不出声时一闪而过。 */
+        Promise.all([
+          playSequence(targetChars, meta.audioMap),
+          new Promise((r) => setTimeout(r, 700)),
+        ]).then(() => {
           setOkFlash(false);
           if (wi + 1 >= words.length) onDone();
           else setWi((p) => p + 1);
-        }, 700);
+        });
       } else {
         setShake(true);
         setTimeout(buildTiles, 700);
       }
       return cur;
     });
-  }, [targetChars, word, wi, words.length, onDone, buildTiles]);
+  }, [targetChars, wi, words.length, onDone, buildTiles, meta.audioMap]);
 
-  /* 换到下一个词时先念一遍，孩子知道自己在拼什么 */
+  /* 换到下一个词时先念一遍，孩子知道自己在拼什么。
+     用老师录的单字连起来念，缺哪个字才用机器音补。 */
   useEffect(() => {
-    if (word) speak(word, { rate: 0.6 });
+    if (word) playSequence(word.split(""), meta.audioMap);
     return stopAudio;
-  }, [word]);
+  }, [word, meta.audioMap]);
 
   const place = useCallback((tileId) => {
     /* 点一个字就念这个字：拼的过程本身就是在认字音。
@@ -100,7 +105,7 @@ export default function BuildWordActivity({ meta, onDone }) {
       <div style={{ fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", gap: 10 }}>
         <span>拼出：<span style={{ color: C.bamboo, fontSize: 30 }}>{word}</span></span>
         <button
-          onClick={() => speak(word, { rate: 0.6 })}
+          onClick={() => playSequence(word.split(""), meta.audioMap)}
           title="再听一遍"
           style={{
             minHeight: 44, minWidth: 44, borderRadius: 12, border: `2px solid ${C.bamboo}`,
