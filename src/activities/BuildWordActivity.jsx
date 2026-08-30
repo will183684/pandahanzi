@@ -15,6 +15,14 @@ export default function BuildWordActivity({ meta, onDone }) {
   const word = words[wi] || "";
   const targetChars = useMemo(() => word.split(""), [word]);
 
+  /* 提示随课程推进递减：
+       第 1-10 课（L1）   整个词都写出来 —— 刚认字，先照着拼
+       第 11-20 课（L2）  只留第一个字，其余靠听
+       第 21 课起（L3+）  一个字都不给，纯听力
+     老师自建的课没有课号，按最容易的来。 */
+  const lessonNo = meta.lessonNo || 1;
+  const hint = lessonNo <= 10 ? "full" : lessonNo <= 20 ? "partial" : "none";
+
   const [tiles, setTiles] = useState([]);
   const [slots, setSlots] = useState([]);
   const [shake, setShake] = useState(false);
@@ -107,15 +115,27 @@ export default function BuildWordActivity({ meta, onDone }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
-      <p style={{ fontSize: 16, color: "#6B6356" }}>看上面的词，把字按顺序拼出来</p>
+      <p style={{ fontSize: 16, color: "#6B6356", textAlign: "center", margin: 0 }}>
+        {hint === "full" ? "看上面的词，把字按顺序拼出来"
+          : hint === "partial" ? "听一听是什么词，第一个字给你了，接着拼"
+          : "听一听是什么词，把它拼出来"}
+      </p>
       <div style={{ fontSize: 20, fontWeight: 800, display: "flex", alignItems: "center", gap: 10 }}>
-        <span>拼出：<span style={{ color: C.bamboo, fontSize: 30 }}>{word}</span></span>
+        <span>
+          拼出：
+          <span style={{ color: C.bamboo, fontSize: 30, letterSpacing: 2 }}>
+            {hint === "full" ? word
+              : hint === "partial" ? targetChars.map((c, i) => (i === 0 ? c : "〇")).join("")
+              : targetChars.map(() => "〇").join("")}
+          </span>
+        </span>
         <button
           onClick={() => playSequence(word.split(""), meta.audioMap)}
           title="再听一遍"
           style={{
             minHeight: 44, minWidth: 44, borderRadius: 12, border: `2px solid ${C.bamboo}`,
-            background: "#fff", fontSize: 22, cursor: "pointer", lineHeight: 1,
+            background: hint === "full" ? "#fff" : "#EAF6EC",
+            fontSize: 22, cursor: "pointer", lineHeight: 1,
           }}
         >🔊</button>
       </div>
