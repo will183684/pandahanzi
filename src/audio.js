@@ -142,6 +142,10 @@ export function playChar(ch, audioMap, opts) {
    这里改成排队：一个念完再念下一个，中间留一点间隔。有老师录音就用
    老师的，缺哪个字才用机器音补，这样一个词里能听到真人声。 */
 let seqToken = 0;
+/* 队列里正在响的那个元素。必须记着 —— 每段都是新建的 Audio，
+   不记的话 stopAudio 只能停下模块里那个单例，队列这段照样响到底，
+   于是新一串起头时和它撞在一起，就是「尾音盖上来」。 */
+let seqEl = null;
 
 const waitFor = (el, ms) => new Promise((done) => {
   let over = false;
@@ -161,9 +165,10 @@ function playCharAwait(ch, audioMap, opts) {
       el.preload = "auto";
       el.playsInline = true;
       el.src = url;
+      seqEl = el;
       const p = el.play();
       if (p && p.catch) p.catch(() => { /* 放不出就当放完了，继续下一个 */ });
-      return waitFor(el, 6000);
+      return waitFor(el, 6000).then(() => { if (seqEl === el) seqEl = null; });
     } catch (e) { /* 落到 TTS */ }
   }
   return speakAwait(ch, opts);
@@ -207,7 +212,8 @@ export async function playSequence(chars, audioMap, { gap = 140, rate = 0.5 } = 
 
 /* 离开活动时收尾，免得声音继续放。 */
 export function stopAudio() {
-  seqToken++;                                    // 让在跑的队列自己停下
+  seqToken++;                                    // 让在跑的队列不再往下排
+  try { if (seqEl) { seqEl.pause(); seqEl.src = ""; seqEl = null; } } catch (e) { /* ignore */ }
   try { if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; } } catch (e) { /* ignore */ }
   try {
     const synth = typeof window !== "undefined" ? window.speechSynthesis : null;

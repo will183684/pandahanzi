@@ -67,10 +67,13 @@ export default function BuildWordActivity({ meta, onDone }) {
   }, [word, meta.audioMap]);
 
   const place = useCallback((tileId) => {
-    /* 点一个字就念这个字：拼的过程本身就是在认字音。
-       有老师录音优先放录音，跟「认一认」一致。 */
     const tl = tiles.find((t) => t.id === tileId);
-    if (tl) playChar(tl.ch, meta.audioMap);
+    /* 点一个字就念这个字 —— 但填满最后一格时不念。
+       紧接着要把整个词连起来念一遍，这时再念单字，那个字刚起头就被
+       整词的读音接管，听着像「羊…小羊」这样结巴了一下。
+       直接交给整词那一遍，孩子照样听得到这个字。 */
+    const completes = slots.filter((s) => s === null).length === 1;
+    if (tl && !completes) playChar(tl.ch, meta.audioMap);
     setSlots((prev) => {
       const firstEmpty = prev.indexOf(null);
       if (firstEmpty === -1) return prev;
@@ -80,7 +83,7 @@ export default function BuildWordActivity({ meta, onDone }) {
       if (!ns.includes(null)) setTimeout(() => check(ns), 180);
       return ns;
     });
-  }, [check, tiles, meta.audioMap]);
+  }, [check, tiles, slots, meta.audioMap]);
 
   const returnTile = useCallback((slotIndex) => {
     setSlots((prev) => {
