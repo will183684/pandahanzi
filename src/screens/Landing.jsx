@@ -237,10 +237,14 @@ export default function Landing({ onEnter, pushToast, session }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <p style={{ fontWeight: 700, fontSize: 16, margin: 0 }}>👋 {teacherInfo.name}，请选择班级</p>
+              {/* 认完口令之后必须有路退回去 —— 换个老师登录、口令输错了想重来，
+                  都得从这儿走。原来这里写的是「清除记忆」，没人认得出那是返回。
+                  尺寸也按 44px 来，手机上点得着。 */}
               <button onClick={() => { localStorage.removeItem("panda_login"); setTeacherAuthed(false); setPw(""); }}
-                style={{ fontSize: 12, padding: "4px 8px", border: "none", background: "#FFE5E5",
-                  color: "#9C9382", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
-                🚪 清除记忆
+                style={{ minHeight: 44, padding: "0 14px", borderRadius: 12,
+                  border: `2px solid ${C.border}`, background: "#fff", color: "#8A8276",
+                  fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                ← 退出登录
               </button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -281,9 +285,10 @@ export default function Landing({ onEnter, pushToast, session }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontWeight: 700, fontSize: 15, color: "#6B6356" }}>👋 教务老师</span>
               <button onClick={() => { localStorage.removeItem("panda_login"); setAdminAuthed(false); setPw(""); }}
-                style={{ fontSize: 12, padding: "4px 8px", border: "none", background: "#FFE5E5",
-                  color: "#9C9382", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>
-                🚪 清除记忆
+                style={{ minHeight: 44, padding: "0 14px", borderRadius: 12,
+                  border: `2px solid ${C.border}`, background: "#fff", color: "#8A8276",
+                  fontSize: 14, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                ← 退出登录
               </button>
             </div>
             <div>
