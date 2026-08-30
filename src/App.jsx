@@ -4,7 +4,7 @@ import {
   getCurriculum, getClassLessons, getClassCharsBrief, getClassLessonChars,
   startClassLesson, updateClassLesson, completeClassLesson, saveClassLessonChars,
   getClassProgress, markProgress, getProfiles, saveProfile, deleteClassLesson,
-  saveSharedAudio, getCharSharedAudios,
+  saveSharedAudio, getCharSharedAudios, getSharedAudioByHanzi,
 } from "./supabaseClient";
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
@@ -177,9 +177,32 @@ export default function PandaHanziApp() {
     return () => { alive = false; };
   }, [viewLessonId, charsTick]);
 
+  /* 词语和句子里用到、但不在本课字表里的字的录音。
+     「小羊」的「小」可能属于别的课，字表里没有它 —— 不单独取一次的话，
+     老师明明录过，孩子在拼词语里听到的还是机器音。
+     只认词句的文本内容，不认 lesson 对象身份，免得每次重取都重查。 */
+  const vocabKey = viewLesson
+    ? (viewLesson.vocab || []).join("") + "|" + (viewLesson.sentence || "")
+    : "";
+  const [extraAudio, setExtraAudio] = useState({});
+  useEffect(() => {
+    const want = Array.from(new Set(vocabKey.split("").filter((c) => /[\u4e00-\u9fa5]/.test(c))));
+    if (!want.length) { setExtraAudio({}); return undefined; }
+    let alive = true;
+    getSharedAudioByHanzi(want)
+      .then((m) => {
+        if (!alive) return;
+        const out = {};
+        m.forEach((v, hanzi) => { if (v.audio_url) out[hanzi] = v.audio_url; });
+        setExtraAudio(out);
+      })
+      .catch(() => { /* 查不到就都用机器音 */ });
+    return () => { alive = false; };
+  }, [vocabKey, charsTick]);
+
   const viewMeta = useMemo(
-    () => toMeta(viewLesson, viewChars, curriculum),
-    [viewLesson, viewChars, curriculum]
+    () => toMeta(viewLesson, viewChars, curriculum, extraAudio),
+    [viewLesson, viewChars, curriculum, extraAudio]
   );
 
   const who = session && session.role === "parent" ? session.name : null;

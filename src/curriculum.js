@@ -33,14 +33,18 @@ export function sourceLesson(classLesson, curriculum) {
   return curriculum.lessonById.get(classLesson.lesson_id) || null;
 }
 
-/* classLesson + chars  ->  meta */
-export function toMeta(classLesson, chars, curriculum) {
+/* classLesson + chars  ->  meta
+
+   extraAudio：词语和句子里用到、但不在本课字表里的字的录音（汉字 -> url）。
+   没有它的话，「小羊」的「小」不在本课 10 个字里，即使老师录过也取不到，
+   孩子听到的是机器音。录音本来就是按字全局共用的，字表内外一视同仁。 */
+export function toMeta(classLesson, chars, curriculum, extraAudio) {
   if (!classLesson) return null;
   const list = chars || [];
   const src = sourceLesson(classLesson, curriculum);
 
   const emojiMap = {};
-  const audioMap = {};
+  const audioMap = { ...(extraAudio || {}) };
   list.forEach((c) => {
     if (c.emoji) emojiMap[c.hanzi] = c.emoji;
     if (c.audio_url) audioMap[c.hanzi] = c.audio_url;
