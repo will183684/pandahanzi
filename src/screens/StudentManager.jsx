@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { C } from "../theme";
 import { getClasses, renameStudentEverywhereRpc } from "../supabaseClient";
-import { Card } from "../components/ui";
+import { Card, ConfirmDialog } from "../components/ui";
 
 /* ===================================================================
    Student Manager (教务老师) — add / delete / move students across classes
@@ -12,6 +12,9 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
   const [addTo, setAddTo] = useState(activeClassId || "");
   const [editKey, setEditKey] = useState(null);  // "clsId|oldName" 如果在编辑
   const [editVal, setEditVal] = useState("");
+  const [allEditName, setAllEditName] = useState(null);   // 在「全部学生」里改名的那个
+  const [allEditVal, setAllEditVal] = useState("");
+  const [pendingPurge, setPendingPurge] = useState(null); // 待确认彻底删除的名字
 
   useEffect(() => {
     let alive = true;
@@ -37,7 +40,16 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const commit = (nlist) => {
+  /* 历史名单默认由「原有历史 ∪ 各班当前名单」推出来。
+     彻底删除时必须能绕开这个并集，否则名字会被班级名单又补回来，
+     所以留了 forceHistory 这个口子。 */
+  const commit = (nlist, forceHistory) => {
+    if (forceHistory) {
+      const updated = nlist.map((c, i) => (i === 0 ? { ...c, allStudents: forceHistory } : c));
+      setList(updated);
+      onSaveClasses(updated);
+      return;
+    }
     // 收集所有学生（包括历史），从第一个班级的 allStudents 开始
     const historical = (nlist[0]?.allStudents || []).slice();
     const current = new Set();
@@ -89,6 +101,30 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
 
     commit(list.map((c) => (c.id === clsId ? { ...c, students: c.students.map((x) => x === oldName ? nm : x) } : c)));
     pushToast(`已改名：${oldName} → ${nm}`);
+  };
+
+  /* 「全部学生」里改名：所有班级的名单 + 历史名单 + 学习进度一起改 */
+  const renameEverywhere = async (oldName, raw) => {
+    const nm = (raw || "").trim();
+    if (!nm || nm === oldName) return;
+    const historical = (list[0]?.allStudents || []);
+    if (historical.includes(nm)) { pushToast(`已经有叫「${nm}」的学生了`); return; }
+
+    try { await renameStudentEverywhereRpc(oldName, nm); }
+    catch (e) { /* RPC 没建时只改名单，进度对不上就认了 */ }
+
+    const nlist = list.map((c) => ({ ...c, students: (c.students || []).map((x) => (x === oldName ? nm : x)) }));
+    commit(nlist, historical.map((x) => (x === oldName ? nm : x)));
+    pushToast(`已改名：${oldName} → ${nm}`);
+  };
+
+  /* 彻底删除：建错了的学生，从各班名单和历史名单里一起抹掉。
+     lesson_progress 里那条（如果有）留着 —— anon key 没有删它的权限，
+     而且建错的学生本来就没有练习记录。 */
+  const purgeStudent = (nm) => {
+    const nlist = list.map((c) => ({ ...c, students: (c.students || []).filter((x) => x !== nm) }));
+    commit(nlist, (list[0]?.allStudents || []).filter((x) => x !== nm));
+    pushToast(`已彻底删除：${nm}`);
   };
 
   const inputStyle = {
@@ -152,26 +188,89 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
             {allStudents.length === 0 ? (
               <span style={{ color: "#9C9382", fontSize: 14 }}>还没有学生</span>
             ) : (
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {allStudents.map((nm) => (
-                  <span key={nm} style={{
-                    background: deletedStudents.has(nm) ? "#f0f0f0" : "#fff",
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 8,
-                    padding: "4px 10px",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    opacity: deletedStudents.has(nm) ? 0.6 : 1,
-                    textDecoration: deletedStudents.has(nm) ? "line-through" : "none",
-                  }}>
-                    {nm}
-                  </span>
-                ))}
+              /* 名字建错了得能就地改掉或抹掉 —— 原来这里只是一排只读的标签，
+                 建错一个名字就永远躺在名单里。 */
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {allStudents.map((nm) => {
+                  const gone = deletedStudents.has(nm);
+                  const editing = allEditName === nm;
+                  return (
+                    <div key={nm} style={{
+                      display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap",
+                      background: gone ? "#F4F1EC" : "#fff",
+                      border: `1px solid ${C.border}`, borderRadius: 10, padding: "6px 10px",
+                    }}>
+                      {editing ? (
+                        <>
+                          <input
+                            autoFocus
+                            value={allEditVal}
+                            onChange={(ev) => setAllEditVal(ev.target.value)}
+                            onKeyDown={(ev) => {
+                              if (ev.key === "Enter") { renameEverywhere(nm, allEditVal); setAllEditName(null); }
+                              else if (ev.key === "Escape") setAllEditName(null);
+                            }}
+                            style={{ ...inputStyle, flex: "1 1 100px", minHeight: 40, padding: "6px 10px", fontSize: 14 }}
+                          />
+                          <button
+                            onClick={() => { renameEverywhere(nm, allEditVal); setAllEditName(null); }}
+                            style={{
+                              minHeight: 40, padding: "0 12px", borderRadius: 10, border: "none",
+                              background: C.bamboo, color: "#fff", fontWeight: 700, cursor: "pointer",
+                            }}>保存</button>
+                          <button onClick={() => setAllEditName(null)} style={{
+                            minHeight: 40, padding: "0 10px", borderRadius: 10,
+                            border: `2px solid ${C.border}`, background: "#fff", color: "#8A8276", cursor: "pointer",
+                          }}>取消</button>
+                        </>
+                      ) : (
+                        <>
+                          <span style={{
+                            flex: "1 1 80px", fontWeight: 700, fontSize: 15,
+                            opacity: gone ? 0.6 : 1,
+                            textDecoration: gone ? "line-through" : "none",
+                          }}>
+                            {nm}
+                            {gone && <span style={{ fontSize: 12, color: "#9C9382", marginLeft: 8, textDecoration: "none" }}>不在任何班级</span>}
+                          </span>
+                          <button
+                            onClick={() => { setAllEditName(nm); setAllEditVal(nm); }}
+                            style={{
+                              minHeight: 40, padding: "0 12px", borderRadius: 10,
+                              border: `2px solid ${C.border}`, background: "#fff",
+                              fontSize: 13, fontWeight: 700, color: "#8A8276", cursor: "pointer",
+                            }}>✏️ 改名</button>
+                          <button
+                            onClick={() => setPendingPurge(nm)}
+                            style={{
+                              minHeight: 40, padding: "0 12px", borderRadius: 10,
+                              border: `2px solid ${C.border}`, background: "#fff",
+                              fontSize: 13, fontWeight: 700, color: C.red, cursor: "pointer",
+                            }}>🗑️ 彻底删除</button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         );
       })()}
+
+      {pendingPurge && (
+        <ConfirmDialog
+          text={
+            `确定彻底删除「${pendingPurge}」吗？\n\n`
+            + `他会从「全部学生」和所有班级名单里消失，之后想找回来只能重新添加。\n`
+            + `如果只是想把他移出某个班级，用下面班级里的「删除」就行 —— 那样名字还留在这份全部名单里。`
+          }
+          confirmLabel="彻底删除"
+          cancelLabel="不删了"
+          onCancel={() => setPendingPurge(null)}
+          onConfirm={() => { const nm = pendingPurge; setPendingPurge(null); purgeStudent(nm); }}
+        />
+      )}
 
       {/* per-class rosters */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
