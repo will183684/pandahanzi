@@ -92,15 +92,17 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
     const target = list.find((c) => c.id === clsId);
     if (target && target.students.includes(nm)) { pushToast("这个名字已在该班"); return; }
 
-    // 尝试调用 RPC 同时更新学习进度；如果函数不存在就只更新班级名单
-    try {
-      await renameStudentEverywhereRpc(oldName, nm);
-    } catch (e) {
-      // RPC 函数不存在（还没在 Supabase 创建）时，这里静默失败，继续只更新班级名单
-    }
+    /* 名单和练习记录要一起改。这一步失败不该挡住改名，但也绝不能闷着 ——
+       名单改了、进度还挂在旧名字下，孩子的星星就凭空少了一片，
+       而界面还报「已改名」，等发现时根本想不到是这儿出的问题。 */
+    let progressMoved = true;
+    try { await renameStudentEverywhereRpc(oldName, nm); }
+    catch (e) { progressMoved = false; }
 
     commit(list.map((c) => (c.id === clsId ? { ...c, students: c.students.map((x) => x === oldName ? nm : x) } : c)));
-    pushToast(`已改名：${oldName} → ${nm}`);
+    pushToast(progressMoved
+      ? `已改名：${oldName} → ${nm}（练习记录已一起转过去）`
+      : `名字改了，但练习记录没能转过去 ⚠️ 请联系管理员`);
   };
 
   /* 「全部学生」里改名：所有班级的名单 + 历史名单 + 学习进度一起改 */
@@ -110,12 +112,15 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
     const historical = (list[0]?.allStudents || []);
     if (historical.includes(nm)) { pushToast(`已经有叫「${nm}」的学生了`); return; }
 
+    let progressMoved = true;
     try { await renameStudentEverywhereRpc(oldName, nm); }
-    catch (e) { /* RPC 没建时只改名单，进度对不上就认了 */ }
+    catch (e) { progressMoved = false; }
 
     const nlist = list.map((c) => ({ ...c, students: (c.students || []).map((x) => (x === oldName ? nm : x)) }));
     commit(nlist, historical.map((x) => (x === oldName ? nm : x)));
-    pushToast(`已改名：${oldName} → ${nm}`);
+    pushToast(progressMoved
+      ? `已改名：${oldName} → ${nm}（练习记录已一起转过去）`
+      : `名字改了，但练习记录没能转过去 ⚠️ 请联系管理员`);
   };
 
   /* 彻底删除：建错了的学生，从各班名单和历史名单里一起抹掉。
