@@ -50,6 +50,20 @@ export function toMeta(classLesson, chars, curriculum, extraAudio, wordAudio) {
     if (c.audio_url) audioMap[c.hanzi] = c.audio_url;
   });
 
+  /* 汉字 -> 拼音，本课的字和干扰字都要有。
+     「听一听」放一个字音让孩子选，选项里混进同音字这题就无解了
+     （L2 的 它/他/她 全念 tā）—— 得靠这张表把它们剔出去。 */
+  const distractors = buildDistractors(list, classLesson, curriculum);
+  const pinyinOf = {};
+  list.forEach((c) => { if (c.pinyin) pinyinOf[c.hanzi] = c.pinyin; });
+  if (curriculum && curriculum.charByHanzi) {
+    distractors.forEach((h) => {
+      if (pinyinOf[h]) return;
+      const c = curriculum.charByHanzi.get(h);
+      if (c && c.pinyin) pinyinOf[h] = c.pinyin;
+    });
+  }
+
   return {
     id: classLesson.id,
     label: classLesson.title || "本课",
@@ -62,7 +76,8 @@ export function toMeta(classLesson, chars, curriculum, extraAudio, wordAudio) {
     audioMap,
     /* 词 -> 老师念的整词录音。没有的词就退回单字拼接。 */
     wordAudioMap: wordAudio || {},
-    distractors: buildDistractors(list, classLesson, curriculum),
+    distractors,
+    pinyinOf,
     /* 课程库来源：用来显示「L3 启蒙进阶 · 第2课」。老师自建的课为 null。 */
     level: src ? src.level : null,
     levelSeq: src ? src.level_seq : null,

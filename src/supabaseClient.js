@@ -131,6 +131,8 @@ export async function getCurriculum() {
     lessons,
     byLevel,
     lessonById: new Map(lessons.map((l) => [l.id, l])),
+    /* 按字查 —— 「听一听」要靠拼音把同音字从选项里剔掉 */
+    charByHanzi: new Map(characters.map((c) => [c.hanzi, c])),
   };
   return curriculumCache;
 }

@@ -16,11 +16,30 @@ export default function ListenActivity({ meta, onDone }) {
   const [audioOk, setAudioOk] = useState(true);
   const target = chars[idx];
 
+  /* 选项里不能出现和目标同音的字 —— 只放一个字音让孩子选，混进同音字
+     这题就无解了（L2 的 它/他/她 全念 tā，听到 tā 根本没法选）。
+     字库里有 119 个字在自己级别内有完全同音的字，而干扰字正是从同级别
+     里随机取的，所以撞上只是迟早的事。
+
+     两道筛子：
+       硬性 —— 拼音完全一样（含声调）的一律不要，这种题无解
+       优先 —— 只差声调的（tā / tǎ）也尽量避开，靠听辨调对五六岁太难；
+               但如果剔完不够三个，就退回只用硬性那道，宁可难一点也要凑齐选项 */
   const options = useMemo(() => {
-    const fillers = (meta.distractors && meta.distractors.length ? meta.distractors : ["大", "小", "上", "下"])
+    const norm = (p) => (p || "").trim().toLowerCase();
+    const toneless = (p) => norm(p).normalize("NFD").replace(/[̀-ͯ]/g, "");
+    const tp = norm(meta.pinyinOf?.[target] || meta.pinyins[idx]);
+
+    const pool = (meta.distractors && meta.distractors.length ? meta.distractors : ["大", "小", "上", "下"])
       .filter((d) => d !== target);
-    return shuffled([target, ...shuffled(fillers).slice(0, 3)]);
-  }, [target, meta.distractors]);
+
+    const py = (d) => norm(meta.pinyinOf?.[d]);
+    const notHomophone = pool.filter((d) => !tp || !py(d) || py(d) !== tp);
+    const alsoDiffTone = notHomophone.filter((d) => !tp || !py(d) || toneless(py(d)) !== toneless(tp));
+
+    const picked = shuffled(alsoDiffTone.length >= 3 ? alsoDiffTone : notHomophone).slice(0, 3);
+    return shuffled([target, ...picked]);
+  }, [target, idx, meta.distractors, meta.pinyinOf, meta.pinyins]);
 
   const play = useCallback(() => {
     setAudioOk(playChar(target, meta.audioMap));
