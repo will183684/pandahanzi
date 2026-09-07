@@ -3,6 +3,7 @@ import { C } from "../theme";
 import { Card, BigButton, ConfirmDialog } from "../components/ui";
 import { supabase, getSharedAudioByHanzi, getWordAudios } from "../supabaseClient";
 import { pickRecorderMime, toPlayableBlob, extFor } from "../recordingFormat";
+import { playSequence, stopAudio } from "../audio";
 
 /* ===================================================================
    本课内容设置 —— 编辑本班当前这节课：
@@ -137,13 +138,20 @@ export default function ContentSettings({
     catch (e) { setRecKey(null); }
   };
 
+  /* 两种试听（整词一段 vs 单字拼接）用的是两套播放机制，
+     切换时必须互相叫停，否则会两个声音压在一起。 */
+  const stopAll = () => {
+    try { if (previewRef.current) previewRef.current.pause(); } catch (e) { /* ignore */ }
+    stopAudio();
+  };
+
   const playPreview = (url) => {
     if (!url) return;
+    stopAll();
     try {
       /* 每次都新建一个 Audio，不复用。
          iOS 刚录完音时音频会话还在「录音」模式，那会儿建出来的 Audio
          元素会一直被路由到听筒、几乎听不见 —— 复用它就一直是哑的。 */
-      try { if (previewRef.current) previewRef.current.pause(); } catch (e) { /* ignore */ }
       const el = new Audio();
       el.preload = "auto";
       el.playsInline = true;
@@ -176,6 +184,17 @@ export default function ContentSettings({
   }, [vocabStr, sentence, rows]);
 
   const [extraAudio, setExtraAudio] = useState({});   // 汉字 -> {audio_url, audio_by}
+
+  /* 老师听到的拼接效果要和学生端一模一样 —— 同一份录音地址表 */
+  const charAudioMap = useMemo(() => {
+    const m = {};
+    rows.forEach((r) => { if (r.hanzi && r.audio_url) m[r.hanzi] = r.audio_url; });
+    Object.entries(extraAudio).forEach(([ch, v]) => { if (v && v.audio_url) m[ch] = v.audio_url; });
+    return m;
+  }, [rows, extraAudio]);
+
+  const playConcat = (w) => { stopAll(); playSequence(w.split(""), charAudioMap); };
+
 
   /* 整词录音。第 31 课（L4）起「拼词语」是纯听力，孩子看不到字，
      只能靠听 —— 这时必须是老师念的整词，单字接起来没有连读和变调。 */
@@ -485,9 +504,9 @@ export default function ContentSettings({
               {needWordAudio && <span style={{ color: C.red, marginLeft: 6 }}>· 这一课必须录</span>}
             </div>
             <p style={{ fontSize: 13, color: "#8A8276", margin: "0 0 10px" }}>
-              {needWordAudio
-                ? "第 31 课起「拼词语」不给字看，孩子只能靠听。请把每个词整个念一遍 —— 单字接起来没有连读和变调（「你好」实际念 ní hǎo），孩子会照着学错。"
-                : "录了整词，「拼词语」就放这一段；没录就用单字接起来念。第 31 课（L4）起是纯听力，那时必须录。"}
+              先点「🔗 听拼接」听听孩子现在听到的效果 —— 那是把单字录音一个个接起来的。
+              觉得别扭（连读、变调不对）就自己念一遍整个词，学生端会优先放你录的这一段。
+              {needWordAudio && <b style={{ color: C.red }}>　第 31 课起「拼词语」不给字看，孩子只能靠听，这一课必须录。</b>}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {wordList.map((w) => {
@@ -498,6 +517,12 @@ export default function ContentSettings({
                     background: "#fff", border: `2px solid ${C.border}`, borderRadius: 10, padding: "6px 10px",
                   }}>
                     <span style={{ fontSize: 22, fontWeight: 800, minWidth: 64 }}>{w}</span>
+                    {/* 先让老师听见「现在是什么效果」，再决定要不要自己录 */}
+                    <button onClick={() => playConcat(w)} title="单字录音接起来的效果，也就是孩子现在听到的"
+                      style={{
+                        minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.border}`,
+                        background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#8A8276",
+                      }}>🔗 听拼接</button>
                     {recKey === `word:${w}` ? (
                       <button onClick={stopRec} style={{
                         minHeight: 44, padding: "0 10px", borderRadius: 10, border: "none",
@@ -505,10 +530,10 @@ export default function ContentSettings({
                       }}>⏹ 停</button>
                     ) : a.audio_url ? (
                       <>
-                        <button onClick={() => playPreview(a.audio_url)} style={{
+                        <button onClick={() => playPreview(a.audio_url)} title="你录的整词" style={{
                           minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.bamboo}`,
-                          background: "#fff", cursor: "pointer", fontSize: 16,
-                        }}>▶️ 试听</button>
+                          background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, color: C.bamboo,
+                        }}>▶️ 听整词</button>
                         <button
                           onClick={() => setPendingRec({ key: `word:${w}`, ch: w, onGot: setWordAudio_(w) })}
                           style={{
