@@ -370,3 +370,27 @@ export async function getCharSharedAudios(charId) {
   if (error) throw error;
   return data || [];
 }
+
+/* ============================================================
+   水平测评结果
+   ============================================================ */
+
+/* 一次测评一行。表还没建时抛错，调用方只提示、不挡住孩子看报告。 */
+export async function saveAssessmentResult(classId, studentName, results) {
+  const { error } = await supabase.from("assessments").insert({
+    class_id: classId, student_name: studentName, results,
+  });
+  if (error) throw error;
+}
+
+export async function getAssessments(classId) {
+  try {
+    const { data, error } = await supabase
+      .from("assessments").select("*").eq("class_id", classId)
+      .order("taken_at", { ascending: false });
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    return [];                 // 表还没建就当没有测评记录
+  }
+}

@@ -7,7 +7,7 @@ import { speak, stopAudio } from "../audio";
 /* ===================================================================
    Student Home
    =================================================================== */
-export default function StudentHome({ studentName, meta, progress, readOnly, avatar, onChangeAvatar, onOpenActivity, onOpenArchive, onLogout }) {
+export default function StudentHome({ studentName, meta, progress, readOnly, avatar, onChangeAvatar, onOpenActivity, onOpenArchive, onOpenAssessment, onLogout }) {
   const doneCount = ACTIVITIES.filter((_, i) => progress[i]).length;
   const allDone = doneCount === ACTIVITIES.length;
   const [showFinale, setShowFinale] = useState(false);
@@ -103,6 +103,9 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
 
       <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 18, flexWrap: "wrap" }}>
         <BigButton color={C.bamboo} light onClick={onOpenArchive}>📚 历史记录</BigButton>
+        {onOpenAssessment && (
+          <BigButton color={C.gold} light onClick={onOpenAssessment}>📋 测一测</BigButton>
+        )}
         <button onClick={onLogout} style={{
           minHeight: 56, padding: "0 18px", background: "none", border: "none", color: "#9C9382",
           fontSize: 15, textDecoration: "underline", cursor: "pointer",
