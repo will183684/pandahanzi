@@ -3,6 +3,7 @@ import { C } from "../theme";
 import { shuffled } from "../utils";
 import { BigButton } from "../components/ui";
 import { playChar, stopAudio } from "../audio";
+import { soundsAlike } from "../polyphones";
 
 /* ===================================================================
    听一听 —— 放字音（老师录音优先，否则 TTS），孩子从四个字里点出来。
@@ -33,9 +34,17 @@ export default function ListenActivity({ meta, onDone }) {
     const pool = (meta.distractors && meta.distractors.length ? meta.distractors : ["大", "小", "上", "下"])
       .filter((d) => d !== target);
 
-    const py = (d) => norm(meta.pinyinOf?.[d]);
-    const notHomophone = pool.filter((d) => !tp || !py(d) || py(d) !== tp);
-    const alsoDiffTone = notHomophone.filter((d) => !tp || !py(d) || toneless(py(d)) !== toneless(tp));
+    /* 硬性：读音撞上的一律不要。比的是全部读音，不是库里存的那一个 ——
+       「教」存 jiào、「觉」存 jué，只比存的那个就会放「觉」进来，可
+       孩子学过「睡觉」，听到 jiào 选「觉」完全说得通。 */
+    const notHomophone = pool.filter((d) => !soundsAlike(target, tp, d, meta.pinyinOf?.[d]));
+
+    /* 优先：只差声调的（tā / tǎ）也避开，靠听辨调是另一项技能。
+       但剔完不够三个就退回上一道，宁可难一点也要凑齐选项。 */
+    const alsoDiffTone = notHomophone.filter((d) => {
+      const p = norm(meta.pinyinOf?.[d]);
+      return !tp || !p || toneless(p) !== toneless(tp);
+    });
 
     const picked = shuffled(alsoDiffTone.length >= 3 ? alsoDiffTone : notHomophone).slice(0, 3);
     return shuffled([target, ...picked]);
