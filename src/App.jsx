@@ -245,17 +245,21 @@ export default function PandaHanziApp() {
     [charsByLesson]
   );
 
-  /* 历史记录按课程库的课号排（L1第1课、L1第2课…），不是按上课先后。
-     老师和孩子都是照着课号找课的，按 seq 排看着就是乱的。
+  /* 历史记录按课程库的课号倒序（课号大的在上面），不是按上课先后。
+     按 seq 排看着是乱的；按课号正序排，最近学的沉到最底下，家长每次
+     进来都得一路划到底才找得到 —— 而他们要找的几乎总是最新那一课。
      自建的课没有课号，排最后，按上课先后。 */
   const lessonsInOrder = useMemo(() => {
     const noOf = (l) => {
       const src = curriculum && l.lesson_id != null ? curriculum.lessonById.get(l.lesson_id) : null;
-      return src ? src.lesson_no : Infinity;
+      return src ? src.lesson_no : null;
     };
     return classLessons.slice().sort((a, b) => {
       const na = noOf(a), nb = noOf(b);
-      return na !== nb ? na - nb : a.seq - b.seq;   // Infinity 相等时落到 seq
+      if (na == null && nb == null) return b.seq - a.seq;
+      if (na == null) return 1;                    // 自建的课始终垫底
+      if (nb == null) return -1;
+      return na !== nb ? nb - na : b.seq - a.seq;  // 课号大的在前
     });
   }, [classLessons, curriculum]);
 
