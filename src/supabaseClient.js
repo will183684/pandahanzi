@@ -394,3 +394,16 @@ export async function getAssessments(classId) {
     return [];                 // 表还没建就当没有测评记录
   }
 }
+
+/* 教务看全部测评记录 —— 招生测的孩子还没入班，按班级过滤会漏掉 */
+export async function getAllAssessments(limit = 200) {
+  try {
+    const { data, error } = await supabase
+      .from("assessments").select("*")
+      .order("taken_at", { ascending: false }).limit(limit);
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    return [];
+  }
+}
