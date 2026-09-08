@@ -7,6 +7,7 @@ import StudentManager from "./StudentManager";
 import TeacherManager from "./TeacherManager";
 import ClassManager from "./ClassManager";
 import CurriculumBrowser from "./CurriculumBrowser";
+import AssessmentAdmin from "./AssessmentAdmin";
 
 /* Shared ghost-button style, also reused by the review banner in App. */
 export const ghostBtn = {
@@ -42,6 +43,8 @@ export default function TeacherArea({
       { k: "classes", t: "🏫 班级" },
       { k: "students", t: "👧 学生" },
       { k: "teachers", t: "🧑‍🏫 老师" },
+      /* 测评记录只给教务 —— 招生分班用的，授课老师不需要 */
+      { k: "assess", t: "📋 测评" },
     );
   }
 
@@ -143,6 +146,9 @@ export default function TeacherArea({
       )}
       {view === "students" && isAdmin && (
         <StudentManager activeClassId={activeClassId} onSaveClasses={onSaveClasses} pushToast={pushToast} />
+      )}
+      {view === "assess" && isAdmin && (
+        <AssessmentAdmin />
       )}
       {view === "teachers" && isAdmin && (
         <TeacherManager pushToast={pushToast} />
