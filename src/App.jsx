@@ -523,6 +523,24 @@ export default function PandaHanziApp() {
   }
 
   /* ---------------- 家长 / 学生 ---------------- */
+  /* 测评必须排在下面那两个提前 return 之前。它不依赖排课，而招生测评走的
+     正是「新建的空班级、一节课都没有」—— 排在后面的话，孩子点了测一测
+     会被「老师还没安排本周内容」那一屏拦住，界面纹丝不动。 */
+  if (assessOpen) {
+    return (
+      <Shell>
+        <Assessment
+          curriculum={curriculum}
+          currentLevel={viewMeta ? viewMeta.level : null}
+          studentName={session.name}
+          onExit={() => setAssessOpen(false)}
+          onFinish={saveAssessment}
+        />
+        <Toast msg={toast} />
+      </Shell>
+    );
+  }
+
   /* 这节课的字表还在路上 —— 显示加载中，别误报「没安排」 */
   if (viewLesson && charsFor !== viewLesson.id) {
     return (
@@ -544,27 +562,15 @@ export default function PandaHanziApp() {
           <h2 style={{ fontSize: 22, marginBottom: 6 }}>老师还没安排本周内容</h2>
           <p style={{ color: "#8A8276" }}>过一会儿再来看看吧 🐼</p>
           <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+            {/* 测评不依赖排课 —— 新生入学测评走的正是这一屏：
+                教务建个空班级让家长登进来，这个班还没有任何课。
+                这里不放入口的话，招生测评根本进不去。 */}
+            <BigButton color={C.gold} light onClick={() => setAssessOpen(true)}>📋 测一测</BigButton>
             <BigButton color={C.bamboo} light onClick={() => setArchiveOpen(true)}>📚 历史记录</BigButton>
             <BigButton color={C.bamboo} light onClick={logout}>退出登录</BigButton>
           </div>
         </div>
         {archive}
-        <Toast msg={toast} />
-      </Shell>
-    );
-  }
-
-  /* 测评盖在最上面：它自己有完整的开始页和报告页，不需要班级课程数据 */
-  if (assessOpen) {
-    return (
-      <Shell>
-        <Assessment
-          curriculum={curriculum}
-          currentLevel={viewMeta ? viewMeta.level : null}
-          studentName={session.name}
-          onExit={() => setAssessOpen(false)}
-          onFinish={saveAssessment}
-        />
         <Toast msg={toast} />
       </Shell>
     );
