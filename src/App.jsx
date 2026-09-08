@@ -364,6 +364,16 @@ export default function PandaHanziApp() {
   }, [viewLessonId, session, pushToast]);
 
   /* ---------------- 学生头像 ---------------- */
+  /* 在读学员 vs 意向学员：名字在班级名单里就是在读的。
+     测评只给意向学员 —— 在读的测出个更高级别，就会引出换班的麻烦，
+     而分班本来是教务按课程进度定的，不该由一次五分钟的测验推翻。
+     （登录规则保证了这个判断可靠：名单非空时只有名单上的名字进得来，
+     名单为空的招生班里，谁都不在名单上。） */
+  const isEnrolled = !!(
+    activeClass && session && session.role === "parent" && session.name
+    && (activeClass.students || []).includes(session.name)
+  );
+
   const myAvatar = (session && session.role === "parent" && session.name
     && profiles[session.name] && profiles[session.name].avatar) || DEFAULT_AVATAR;
 
@@ -526,7 +536,7 @@ export default function PandaHanziApp() {
   /* 测评必须排在下面那两个提前 return 之前。它不依赖排课，而招生测评走的
      正是「新建的空班级、一节课都没有」—— 排在后面的话，孩子点了测一测
      会被「老师还没安排本周内容」那一屏拦住，界面纹丝不动。 */
-  if (assessOpen) {
+  if (assessOpen && !isEnrolled) {
     return (
       <Shell>
         <Assessment
@@ -565,7 +575,9 @@ export default function PandaHanziApp() {
             {/* 测评不依赖排课 —— 新生入学测评走的正是这一屏：
                 教务建个空班级让家长登进来，这个班还没有任何课。
                 这里不放入口的话，招生测评根本进不去。 */}
-            <BigButton color={C.gold} light onClick={() => setAssessOpen(true)}>📋 测一测</BigButton>
+            {!isEnrolled && (
+              <BigButton color={C.gold} light onClick={() => setAssessOpen(true)}>📋 测一测</BigButton>
+            )}
             <BigButton color={C.bamboo} light onClick={() => setArchiveOpen(true)}>📚 历史记录</BigButton>
             <BigButton color={C.bamboo} light onClick={logout}>退出登录</BigButton>
           </div>
@@ -587,7 +599,7 @@ export default function PandaHanziApp() {
             studentName={session.name} meta={viewMeta} progress={viewProgress} readOnly={false}
             avatar={myAvatar} onChangeAvatar={() => setAvatarOpen(true)}
             onOpenActivity={setActiveActivity} onOpenArchive={() => setArchiveOpen(true)}
-            onOpenAssessment={() => setAssessOpen(true)} onLogout={logout}
+            onOpenAssessment={isEnrolled ? null : () => setAssessOpen(true)} onLogout={logout}
           />
         )
       ) : (
