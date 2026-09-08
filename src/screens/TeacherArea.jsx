@@ -43,7 +43,7 @@ export default function TeacherArea({
       { k: "classes", t: "🏫 班级" },
       { k: "students", t: "👧 学生" },
       { k: "teachers", t: "🧑‍🏫 老师" },
-      /* 测评只给教务 —— 招生分班用的，授课老师不需要 */
+      /* 测评记录只给教务 —— 招生分班用的，授课老师不需要 */
       { k: "assess", t: "📋 测评" },
     );
   }
@@ -148,7 +148,7 @@ export default function TeacherArea({
         <StudentManager activeClassId={activeClassId} onSaveClasses={onSaveClasses} pushToast={pushToast} />
       )}
       {view === "assess" && isAdmin && (
-        <AssessmentAdmin curriculum={curriculum} classId={activeClassId} pushToast={pushToast} />
+        <AssessmentAdmin />
       )}
       {view === "teachers" && isAdmin && (
         <TeacherManager pushToast={pushToast} />

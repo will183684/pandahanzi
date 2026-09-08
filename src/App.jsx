@@ -4,7 +4,7 @@ import {
   getCurriculum, getClassLessons, getClassCharsBrief, getClassLessonChars,
   startClassLesson, updateClassLesson, completeClassLesson, saveClassLessonChars,
   getClassProgress, markProgress, getProfiles, saveProfile, deleteClassLesson,
-  saveSharedAudio, getCharSharedAudios, getSharedAudioByHanzi, getWordAudios,
+  saveSharedAudio, getCharSharedAudios, getSharedAudioByHanzi, getWordAudios, saveAssessmentResult,
 } from "./supabaseClient";
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
@@ -13,6 +13,7 @@ import { Toast, Shell, BigButton } from "./components/ui";
 import ActivityHost from "./activities/ActivityHost";
 import Landing from "./screens/Landing";
 import StudentHome from "./screens/StudentHome";
+import Assessment from "./screens/Assessment";
 import ReviewHome from "./screens/ReviewHome";
 import ArchivePanel from "./screens/ArchivePanel";
 import LessonPicker from "./screens/LessonPicker";
@@ -74,6 +75,7 @@ export default function PandaHanziApp() {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [assessOpen, setAssessOpen] = useState(false);
   const [reviewId, setReviewId] = useState(null);     // 回顾中的 class_lesson id
 
   /* ---------------- 课程库：全局加载一次 ---------------- */
@@ -373,6 +375,14 @@ export default function PandaHanziApp() {
     saveProfile(activeClass.id, name, { avatar: a }).catch(() => pushToast("头像保存失败 ⚠️"));
   }, [activeClass, session, pushToast]);
 
+  /* 测评结果落库。存不下也不该挡住孩子看报告 —— 报告是当场算出来的，
+     入库只是为了教务那边招生分班时能回看。 */
+  const saveAssessment = useCallback((results) => {
+    if (!activeClassId || !session || session.role !== "parent" || !session.name) return;
+    saveAssessmentResult(activeClassId, session.name, results)
+      .catch(() => pushToast("测评结果没能保存，报告仍然有效 ⚠️"));
+  }, [activeClassId, session, pushToast]);
+
   /* ---------------- 进出班级 ---------------- */
   const enterClass = useCallback((cls, sess) => {
     setLoaded(false);
@@ -544,6 +554,22 @@ export default function PandaHanziApp() {
     );
   }
 
+  /* 测评盖在最上面：它自己有完整的开始页和报告页，不需要班级课程数据 */
+  if (assessOpen) {
+    return (
+      <Shell>
+        <Assessment
+          curriculum={curriculum}
+          currentLevel={viewMeta ? viewMeta.level : null}
+          studentName={session.name}
+          onExit={() => setAssessOpen(false)}
+          onFinish={saveAssessment}
+        />
+        <Toast msg={toast} />
+      </Shell>
+    );
+  }
+
   return (
     <Shell banner={reviewBanner}>
       {activeActivity == null ? (
@@ -555,7 +581,7 @@ export default function PandaHanziApp() {
             studentName={session.name} meta={viewMeta} progress={viewProgress} readOnly={false}
             avatar={myAvatar} onChangeAvatar={() => setAvatarOpen(true)}
             onOpenActivity={setActiveActivity} onOpenArchive={() => setArchiveOpen(true)}
-            onLogout={logout}
+            onOpenAssessment={() => setAssessOpen(true)} onLogout={logout}
           />
         )
       ) : (
