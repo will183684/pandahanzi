@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { C } from "../theme";
-import { getClasses, renameStudentEverywhereRpc } from "../supabaseClient";
+import { getClasses, renameStudentEverywhereRpc, purgeStudentData } from "../supabaseClient";
 import { Card, ConfirmDialog } from "../components/ui";
 
 /* ===================================================================
@@ -123,13 +123,16 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
       : `名字改了，但练习记录没能转过去 ⚠️ 请联系管理员`);
   };
 
-  /* 彻底删除：建错了的学生，从各班名单和历史名单里一起抹掉。
-     lesson_progress 里那条（如果有）留着 —— anon key 没有删它的权限，
-     而且建错的学生本来就没有练习记录。 */
-  const purgeStudent = (nm) => {
+  /* 彻底删除：名单、历史名单、练习记录、测评记录、头像，一样不留。
+     以前只抹名单、把库里的记录留着，结果那些记录又把人顶回进度表里
+     （二班的 Ashley、Max 就是这么来的）。既然叫「彻底」，就该是彻底。 */
+  const purgeStudent = async (nm) => {
     const nlist = list.map((c) => ({ ...c, students: (c.students || []).filter((x) => x !== nm) }));
     commit(nlist, (list[0]?.allStudents || []).filter((x) => x !== nm));
-    pushToast(`已彻底删除：${nm}`);
+    const failed = await purgeStudentData(nm);
+    pushToast(failed.length
+      ? `已删除「${nm}」，但${failed.join("、")}没能清掉 ⚠️`
+      : `已彻底删除：${nm}（练习和测评记录一并清除）`);
   };
 
   const inputStyle = {
@@ -267,8 +270,8 @@ export default function StudentManager({ activeClassId, onSaveClasses, pushToast
         <ConfirmDialog
           text={
             `确定彻底删除「${pendingPurge}」吗？\n\n`
-            + `他会从「全部学生」和所有班级名单里消失，之后想找回来只能重新添加。\n`
-            + `如果只是想把他移出某个班级，用下面班级里的「删除」就行 —— 那样名字还留在这份全部名单里。`
+            + `名单、练习记录、测评记录、头像会一起清掉，删完找不回来。\n`
+            + `如果只是想把他移出某个班级，用下面班级里的「删除」就行 —— 那样名字和练习都还在。`
           }
           confirmLabel="彻底删除"
           cancelLabel="不删了"

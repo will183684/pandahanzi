@@ -320,6 +320,35 @@ export async function renameStudentEverywhereRpc(oldName, newName) {
   if (error) throw error;
 }
 
+/* 彻底删除一个学生时，把他在库里留下的东西一并抹掉。
+   改名要保留练习记录，彻底删除不用 —— 名字都不留了，记录留着只会
+   在各处冒出来（进度表就被这些旧记录顶出过幽灵学生）。
+
+   一处失败不该挡住其余几处：名单那边已经删了，这边能清多少清多少，
+   把清不掉的报回去，让界面如实说一声，别闷着。 */
+export async function purgeStudentData(name) {
+  const failed = [];
+
+  /* 删完一定要回查。RLS 拦下来的删除不报错 —— 它只是删了 0 行，
+     HTTP 照样 204，看起来完全成功。（kv 就是这样：没有 DELETE 策略，
+     头像那条怎么删都还在，而界面会高高兴兴说已清除。） */
+  const del = async (label, table, column, value) => {
+    try {
+      const { error } = await supabase.from(table).delete().eq(column, value);
+      if (error) throw error;
+      const { data } = await supabase.from(table).select(column).eq(column, value).limit(1);
+      if (data && data.length) throw new Error("still there");
+    } catch (e) { failed.push(label); }
+  };
+
+  await del("练习记录", "lesson_progress", "student_name", name);
+  await del("测评记录", "assessments", "student_name", name);
+  /* 头像存在 kv 里，key = profile:名字，每个班一份，所以不限 class_id */
+  await del("头像", TABLE, "key", "profile:" + name);
+
+  return failed;
+}
+
 /* ============================================================
    共享音频（老师可配音，其他班级可复用）
    ============================================================ */
