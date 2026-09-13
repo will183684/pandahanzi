@@ -13,8 +13,14 @@ import { playSequence, stopAudio } from "../audio";
 export default function ContentSettings({
   lesson, lessonNo, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onBack, pushToast, busy,
   /* editMode：从「课程编辑」进来的，只改内容 —— 藏掉「换一课 / 完成本课」
-     这些会动排课状态的按钮。 */
+     这些会动排课状态的按钮。
+
+     libraryMode：从「课程库」直接进来的，这一课还没布置给任何班。
+     录音和词语句子照常改（录音本来就是全站共用的，词句存在课程库那张表里），
+     但字表是只读的 —— 那是 1200 字的总表，一改就影响所有班级的所有课，
+     库里也没开写权限。要加字删字改拼音，去「课程编辑」改本班自己那份。 */
   editMode = false,
+  libraryMode = false,
 }) {
   const [title, setTitle] = useState("");
   const [vocabStr, setVocabStr] = useState("");
@@ -339,9 +345,13 @@ export default function ContentSettings({
         <div>
           <h3 style={{ margin: 0, fontSize: 20 }}>✏️ {lesson.title}</h3>
           <span style={{ fontSize: 13, color: "#9C9382" }}>
-            本班第 {lesson.seq} 次课
-            {lesson.lesson_id ? "　·　来自课程库" : "　·　自建"}
-            {lesson.status === "active" ? "　·　正在上 🔵" : "　·　已上过"}
+            {libraryMode ? "课程库　·　还没布置给班级" : (
+              <>
+                本班第 {lesson.seq} 次课
+                {lesson.lesson_id ? "　·　来自课程库" : "　·　自建"}
+                {lesson.status === "active" ? "　·　正在上 🔵" : "　·　已上过"}
+              </>
+            )}
           </span>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -379,31 +389,49 @@ export default function ContentSettings({
       )}
 
       {/* 字表 */}
-      <label style={labelStyle}>本课汉字（{rows.length} 个）</label>
+      <label style={labelStyle}>
+        本课汉字（{rows.length} 个）
+        {libraryMode && (
+          <span style={{ fontWeight: 600, color: "#9C9382", fontSize: 13 }}>
+            　· 字和拼音在课程库里是固定的，要改去「📚 课程编辑」改本班那份
+          </span>
+        )}
+      </label>
       <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
         {rows.map((r, i) => (
           <div key={i} style={{
             display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap",
             padding: 8, borderRadius: 12, border: `2px solid ${C.border}`, background: "#FFFDF8",
           }}>
-            <input
-              value={r.hanzi}
-              onChange={(ev) => patchRow(i, { hanzi: ev.target.value })}
-              maxLength={1}
-              style={{ ...inputStyle, width: 52, fontSize: 26, fontWeight: 800, textAlign: "center", padding: 4 }}
-            />
-            <input
-              value={r.pinyin}
-              onChange={(ev) => patchRow(i, { pinyin: ev.target.value })}
-              placeholder="拼音"
-              style={{ ...inputStyle, flex: "1 1 90px", minWidth: 80 }}
-            />
-            <input
-              value={r.emoji}
-              onChange={(ev) => patchRow(i, { emoji: ev.target.value })}
-              placeholder="🖼️"
-              style={{ ...inputStyle, width: 60, textAlign: "center" }}
-            />
+            {libraryMode ? (
+              /* 课程库里的字表是只读的，见顶上 libraryMode 的说明 */
+              <>
+                <span style={{ width: 52, fontSize: 26, fontWeight: 800, textAlign: "center" }}>{r.hanzi}</span>
+                <span style={{ flex: "1 1 90px", minWidth: 80, color: "#8A8276", fontSize: 15 }}>{r.pinyin}</span>
+                <span style={{ width: 60, textAlign: "center", fontSize: 20 }}>{r.emoji}</span>
+              </>
+            ) : (
+              <>
+                <input
+                  value={r.hanzi}
+                  onChange={(ev) => patchRow(i, { hanzi: ev.target.value })}
+                  maxLength={1}
+                  style={{ ...inputStyle, width: 52, fontSize: 26, fontWeight: 800, textAlign: "center", padding: 4 }}
+                />
+                <input
+                  value={r.pinyin}
+                  onChange={(ev) => patchRow(i, { pinyin: ev.target.value })}
+                  placeholder="拼音"
+                  style={{ ...inputStyle, flex: "1 1 90px", minWidth: 80 }}
+                />
+                <input
+                  value={r.emoji}
+                  onChange={(ev) => patchRow(i, { emoji: ev.target.value })}
+                  placeholder="🖼️"
+                  style={{ ...inputStyle, width: 60, textAlign: "center" }}
+                />
+              </>
+            )}
             {/* 录音是全站共用的，一个字只有一段，重录会盖掉所有班级听到的那段。
                 所以有录音时先给试听 + 「重录」，别让人一按麦克风就覆盖掉。 */}
             {recKey === `row:${i}` ? (
@@ -435,7 +463,7 @@ export default function ContentSettings({
                 background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#8A8276",
               }}>🎤 录音</button>
             )}
-            <span style={{ display: "flex", gap: 2 }}>
+            <span style={{ display: libraryMode ? "none" : "flex", gap: 2 }}>
               <button onClick={() => moveRow(i, -1)} disabled={i === 0} style={{
                 minHeight: 44, width: 32, borderRadius: 10, border: `2px solid ${C.border}`,
                 background: "#fff", cursor: i === 0 ? "not-allowed" : "pointer", opacity: i === 0 ? 0.4 : 1,
@@ -446,10 +474,12 @@ export default function ContentSettings({
                 opacity: i === rows.length - 1 ? 0.4 : 1,
               }}>↓</button>
             </span>
-            <button onClick={() => removeRow(i)} style={{
-              minHeight: 44, padding: "0 10px", borderRadius: 10, border: `2px solid ${C.border}`,
-              background: "#fff", color: C.red, fontWeight: 700, cursor: "pointer",
-            }}>删</button>
+            {!libraryMode && (
+              <button onClick={() => removeRow(i)} style={{
+                minHeight: 44, padding: "0 10px", borderRadius: 10, border: `2px solid ${C.border}`,
+                background: "#fff", color: C.red, fontWeight: 700, cursor: "pointer",
+              }}>删</button>
+            )}
           </div>
         ))}
       </div>
@@ -469,10 +499,12 @@ export default function ContentSettings({
         />
       )}
 
-      <button onClick={addRow} style={{
-        minHeight: 48, padding: "0 16px", borderRadius: 12, border: `2px dashed ${C.bamboo}`,
-        background: "#fff", color: C.bamboo, fontWeight: 800, cursor: "pointer", marginBottom: 16,
-      }}>＋ 添加一个字</button>
+      {!libraryMode && (
+        <button onClick={addRow} style={{
+          minHeight: 48, padding: "0 16px", borderRadius: 12, border: `2px dashed ${C.bamboo}`,
+          background: "#fff", color: C.bamboo, fontWeight: 800, cursor: "pointer", marginBottom: 16,
+        }}>＋ 添加一个字</button>
+      )}
 
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <div>

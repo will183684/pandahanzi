@@ -320,6 +320,17 @@ export async function renameStudentEverywhereRpc(oldName, newName) {
   if (error) throw error;
 }
 
+/* 改课程库里那一课的词语和句子（不是某个班的副本）。
+   只动 lessons 这张表 —— 字表在 characters 里，那是 1200 字的总表，
+   不开写权限，也不该被一节课的编辑牵动。
+
+   注意：布置课程时是把词句拷贝进班里的，所以这里改完，已经布置出去的
+   班不受影响，之后再布置的才用新的。 */
+export async function updateCurriculumLesson(lessonId, patch) {
+  const { error } = await supabase.from("lessons").update(patch).eq("id", lessonId);
+  if (error) throw error;
+}
+
 /* 彻底删除一个学生时，把他在库里留下的东西一并抹掉。
    改名要保留练习记录，彻底删除不用 —— 名字都不留了，记录留着只会
    在各处冒出来（进度表就被这些旧记录顶出过幽灵学生）。
