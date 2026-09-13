@@ -184,12 +184,31 @@ export function preloadAudio(audioMap, chars) {
   want.forEach((ch) => { const u = audioMap[ch]; if (u && /^https?:/.test(u)) ensureClip(u); });
 }
 
-/* 播到掐好的结尾就停 —— 免得把尾巴那一两秒空白也放完 */
-let cutTimer = null;
-function armCut(el, dur) {
-  if (cutTimer) { clearTimeout(cutTimer); cutTimer = null; }
-  if (!dur) return;
-  cutTimer = setTimeout(() => { try { el.pause(); } catch (e) { /* ignore */ } }, dur * 1000 + 60);
+/* 起播位置：换了 src 之后元素还没读到元数据，这时候赋 currentTime 是不生效的
+   —— 第一次点会从 0 开始放（也就是从那段空白开始），所以要在 loadedmetadata
+   到了之后补一次。第二次点同一个字 src 没变、早就加载好了，一次就成，
+   这正是「刚点是断的、再听就完整」的由来。 */
+function seekTo(el, pos) {
+  const go = () => { try { if (Math.abs(el.currentTime - pos) > 0.02) el.currentTime = pos; } catch (e) { /* ignore */ } };
+  go();
+  if (el.readyState < 1) el.addEventListener("loadedmetadata", go, { once: true });
+}
+
+/* 播到掐好的结尾就停 —— 免得把尾巴那一两秒空白也放完。
+   按播放位置判断，不能按秒表：万一起播没跳成，秒表会把字拦腰砍掉。 */
+let cutEl = null;
+let cutFn = null;
+function clearCut() {
+  if (cutEl && cutFn) { try { cutEl.removeEventListener("timeupdate", cutFn); } catch (e) { /* ignore */ } }
+  cutEl = null; cutFn = null;
+}
+function armCut(el, clip) {
+  clearCut();
+  if (!clip || !clip.dur) return;
+  const end = clip.head + clip.dur;
+  cutFn = () => { if (el.currentTime >= end) { try { el.pause(); } catch (e) { /* ignore */ } clearCut(); } };
+  cutEl = el;
+  el.addEventListener("timeupdate", cutFn);
 }
 
 /* 放一个字：有老师录音就放录音，否则 TTS。 */
@@ -202,8 +221,8 @@ export function playChar(ch, audioMap, opts) {
       const clip = clips.get(url);
       if (clip) {
         if (audioEl.src !== clip.src) audioEl.src = clip.src;
-        audioEl.currentTime = clip.head;
-        armCut(audioEl, clip.dur);
+        seekTo(audioEl, clip.head);
+        armCut(audioEl, clip);
       } else {
         audioEl.src = url;
         audioEl.currentTime = 0;
@@ -239,6 +258,23 @@ const waitFor = (el, ms) => new Promise((done) => {
   el.addEventListener("error", finish, { once: true });
 });
 
+/* 等到播放位置走过 end（或者放完 / 出错 / 超时兜底）。 */
+const waitUntil = (el, end, ms) => new Promise((done) => {
+  let over = false;
+  const finish = () => {
+    if (over) return;
+    over = true;
+    clearTimeout(t);
+    el.removeEventListener("timeupdate", tick);
+    done();
+  };
+  const tick = () => { if (el.currentTime >= end) finish(); };
+  const t = setTimeout(finish, ms);
+  el.addEventListener("timeupdate", tick);
+  el.addEventListener("ended", finish, { once: true });
+  el.addEventListener("error", finish, { once: true });
+});
+
 /* 放一个字并等它放完。返回 Promise。 */
 function playCharAwait(ch, audioMap, opts) {
   const url = audioMap && audioMap[ch];
@@ -250,14 +286,17 @@ function playCharAwait(ch, audioMap, opts) {
       el.playsInline = true;
       const clip = clips.get(url);
       el.src = clip ? clip.src : url;
-      if (clip && clip.head) el.currentTime = clip.head;
+      if (clip && clip.head) seekTo(el, clip.head);
       if (!clip) ensureClip(url);
       seqEl = el;
       const p = el.play();
       if (p && p.catch) p.catch(() => { /* 放不出就当放完了，继续下一个 */ });
-      /* 掐掉尾部空白：到点就算这个字念完了，接着念下一个，别干等那一两秒 */
-      const limit = clip && clip.dur ? clip.dur * 1000 + 60 : 6000;
-      return waitFor(el, limit).then(() => {
+      /* 掐掉尾部空白：念到那儿就算这个字完了，接着念下一个，别干等那一两秒。
+         同样要看播放位置 —— 按秒表会在起播没跳成时把字砍断。 */
+      const wait = clip && clip.dur
+        ? waitUntil(el, clip.head + clip.dur, 6000)
+        : waitFor(el, 6000);
+      return wait.then(() => {
         try { el.pause(); } catch (e) { /* ignore */ }
         if (seqEl === el) seqEl = null;
       });
@@ -305,7 +344,7 @@ export async function playSequence(chars, audioMap, { gap = 140, rate = 0.5 } = 
 /* 离开活动时收尾，免得声音继续放。 */
 export function stopAudio() {
   seqToken++;                                    // 让在跑的队列不再往下排
-  if (cutTimer) { clearTimeout(cutTimer); cutTimer = null; }
+  clearCut();
   try { if (seqEl) { seqEl.pause(); seqEl.src = ""; seqEl = null; } } catch (e) { /* ignore */ }
   try { if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; } } catch (e) { /* ignore */ }
   try {
