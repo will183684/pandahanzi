@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { C, LEVELS } from "../theme";
-import { getClasses, getClassLessons, startClassLesson, deleteClassLesson } from "../supabaseClient";
+import {
+  getClasses, getClassLessons, startClassLesson, deleteClassLesson,
+  getSharedAudioByHanzi, saveSharedAudio, saveWordAudio, updateCurriculumLesson,
+} from "../supabaseClient";
 import { Card, ConfirmDialog } from "../components/ui";
 import LessonList from "../components/LessonList";
+import ContentSettings from "./ContentSettings";
 
 /* ===================================================================
    课程库 —— 浏览全部 1200 字 / 120 课，并把某一课布置给某个班。
@@ -10,7 +14,7 @@ import LessonList from "../components/LessonList";
    教务能布置给所有班；授课老师只能布置给自己名下的班（myClassIds）。
    「已上」标记跟着上面选的目标班走，所以换班时要重新拉那个班的排课。
    =================================================================== */
-export default function CurriculumBrowser({ curriculum, myClassIds, activeClassId, pushToast }) {
+export default function CurriculumBrowser({ curriculum, myClassIds, activeClassId, pushToast, session }) {
   const [classes, setClasses] = useState(null);
   const [targetId, setTargetId] = useState(activeClassId || "");
   const [targetLessons, setTargetLessons] = useState([]);
@@ -93,6 +97,92 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
     setBusy(false);
   }, [pending, targetId, loadTarget, pushToast]);
 
+  /* ---------------- 直接在库里编辑（不必先布置） ----------------
+
+     老师备课时想提前给某一课补录音、调词句，以前必须先把这课排给一个班，
+     排完还得记着撤回。录音本来就是按字全站共用的，词句也存在课程库这张
+     表里，都不需要班级这个中间人。
+
+     能改的只有录音和词语句子；字和拼音在库里是只读的，理由见
+     ContentSettings 里 libraryMode 的说明。 */
+  /* ContentSettings 是按「本班的一节课」写的，靠 lesson.id 认人。
+     这里给库里的课一个不会和班级排课撞车的 id。 */
+  const libIdOf = (l) => `lib:${l.id}`;
+
+  const [editing, setEditing] = useState(null);     // 课程库里的那一课
+  const [editChars, setEditChars] = useState([]);
+  const [editCharsFor, setEditCharsFor] = useState(null);
+
+  const openEditor = useCallback(async (l) => {
+    setEditing(l);
+    setEditCharsFor(null);
+    const hanzis = (l.chars || []).map((c) => c.hanzi);
+    let audio = new Map();
+    try { audio = await getSharedAudioByHanzi(hanzis); }
+    catch (e) { pushToast("录音读取失败，只能先改词句 ⚠️"); }
+    setEditChars((l.chars || []).map((c) => {
+      const a = audio.get(c.hanzi);
+      return { ...c, audio_url: (a && a.audio_url) || null, audio_by: (a && a.audio_by) || null };
+    }));
+    setEditCharsFor(libIdOf(l));
+  }, [pushToast]);
+
+  const saveLibChars = useCallback(async (rows, extras = [], wordAudios = []) => {
+    if (!editing) return;
+    setBusy(true);
+    let failed = false;
+    const byHanzi = new Map((curriculum.characters || []).map((c) => [c.hanzi, c]));
+    const by = (session && session.name) || "老师";
+    for (const row of [...rows, ...extras]) {
+      const ch = byHanzi.get(row.hanzi);
+      if (!row.audio_url || !ch || !row.reRecorded) continue;
+      try { await saveSharedAudio(ch.id, by, row.audio_url); } catch (e) { failed = true; }
+    }
+    for (const w of wordAudios) {
+      try { await saveWordAudio(w.word, by, w.audio_url); } catch (e) { failed = true; }
+    }
+    setBusy(false);
+    if (failed) pushToast("有录音没能存进共享库 ⚠️");
+  }, [editing, curriculum, session, pushToast]);
+
+  const saveLibLesson = useCallback(async (patch) => {
+    if (!editing) return;
+    try {
+      /* title 属于班级那份副本，课程库这张表里没有，别往里塞 */
+      await updateCurriculumLesson(editing.id, {
+        vocab: patch.vocab, sentence: patch.sentence,
+      });
+      editing.vocab = patch.vocab;          // 让列表上立刻看到改动
+      editing.sentence = patch.sentence;
+      pushToast("已保存到课程库 ✅");
+    } catch (e) {
+      pushToast("保存到课程库失败 ⚠️");
+    }
+  }, [editing, pushToast]);
+
+  if (editing) {
+    const lv = LEVELS.find((x) => x.level === editing.level);
+    return (
+      <ContentSettings
+        libraryMode
+        lesson={{
+          id: libIdOf(editing),
+          title: `${lv ? lv.name : "L?"} 第${editing.level_seq}课`,
+          vocab: editing.vocab || [],
+          sentence: editing.sentence || "",
+        }}
+        lessonNo={editing.lesson_no}
+        chars={editChars}
+        charsFor={editCharsFor}
+        busy={busy}
+        pushToast={pushToast}
+        onSaveChars={saveLibChars}
+        onSaveLesson={saveLibLesson}
+        onBack={() => { setEditing(null); setEditChars([]); setEditCharsFor(null); }}
+      />
+    );
+  }
+
   if (!curriculum) return <Card><p style={{ color: "#9C9382" }}>正在加载课程库…</p></Card>;
   if (!classes) return <Card><p style={{ color: "#9C9382" }}>正在加载班级…</p></Card>;
 
@@ -103,7 +193,8 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
       <h3 style={{ marginTop: 0 }}>📖 课程库</h3>
       <p style={{ fontSize: 13, color: "#9C9382", marginTop: 0 }}>
         全部 {totalChars} 字 · {curriculum.lessons.length} 课，分 {LEVELS.length} 级。
-        选好班级后点「布置」，这一课的字（连同拼音、词语、句子）就会拷进那个班。
+        选好班级后点「布置」，这一课的字（连同拼音、词语、句子）就会拷进那个班。<br />
+        想提前备课，直接点「✏️ 编辑」录音、改词句，不用先布置。
       </p>
 
       {/* 目标班级 */}
@@ -136,7 +227,7 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
 
       <LessonList
         curriculum={curriculum} taken={taken} busy={busy}
-        onPick={assign} pickLabel="布置" onUnpick={unassign}
+        onPick={assign} pickLabel="布置" onUnpick={unassign} onEdit={openEditor}
       />
 
       {pending && (

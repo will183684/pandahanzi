@@ -23,7 +23,7 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
     return stopAudio;
   }, [showFinale]);
 
-  const messages = ["继续加油，胖胖陪着你！", "你做得真好！", "再来一个就更厉害啦！", "了不起，快完成啦！", "全部完成，太厉害啦！"];
+  const messages = ["继续加油，PanPan陪着你！", "你做得真好！", "再来一个就更厉害啦！", "了不起，快完成啦！", "全部完成，太厉害啦！"];
   const lv = meta.level ? LEVEL_BY_NO[meta.level] : null;
 
   return (
@@ -124,7 +124,7 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
           </div>
           <div style={{ fontSize: 44, letterSpacing: 8, marginTop: 6 }}>🎓</div>
           <h2 style={{ fontSize: 26, margin: "8px 0" }}>本周全部完成！</h2>
-          <p style={{ fontSize: 18, color: "#6B6356" }}>胖胖为你鼓掌！👏</p>
+          <p style={{ fontSize: 18, color: "#6B6356" }}>PanPan为你鼓掌！👏</p>
           <div style={{ display: "flex", gap: 14, marginTop: 18, flexWrap: "wrap", justifyContent: "center" }}>
             <BigButton color={C.gold} onClick={() => { setShowFinale(false); onOpenArchive(); }}>查看历史记录 📚</BigButton>
             <BigButton color={C.bamboo} light onClick={() => setShowFinale(false)}>继续看看</BigButton>

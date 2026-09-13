@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { ACTIVITIES, C } from "../theme";
+import { preloadAudio } from "../audio";
 import { Card, CelebrationOverlay } from "../components/ui";
 import FlashcardActivity from "./FlashcardActivity";
 import FindActivity from "./FindActivity";
@@ -18,6 +19,13 @@ export default function ActivityHost({ activityIndex, meta, readOnly, done, avat
   /* 每次「再做一遍」就 +1，用作子组件的 key —— 重新挂载即重新出题 */
   const [round, setRound] = useState(0);
   const def = ACTIVITIES[activityIndex];
+
+  /* 一进活动就把这一课的录音全抓下来。等孩子翻到卡片时已经在本地了，
+     点下去就出声 —— 否则每个字第一次播都要等一次网络往返。 */
+  useEffect(() => {
+    preloadAudio(meta.audioMap, meta.chars);
+    if (meta.wordAudioMap) preloadAudio(meta.wordAudioMap, null);
+  }, [meta.audioMap, meta.chars, meta.wordAudioMap]);
 
   /* 完成即记录，不等孩子点关闭 —— 中途关掉页面也不会丢进度 */
   const finish = useCallback(() => {
