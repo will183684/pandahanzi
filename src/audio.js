@@ -131,7 +131,15 @@ const SILENCE = 0.02;   // 低于这个振幅算静音
 const HEAD_PAD = 0.04;  // 起播往前留一点，别把字头的爆破音削掉
 const TAIL_PAD = 0.12;  // 结尾多留一点余韵，收得太干听着突兀
 
-/* url -> { src, head, dur }；dur 是掐完之后的实际时长 */
+function guessMime(url) {
+  if (/\.mp4|\.m4a/i.test(url)) return "audio/mp4";
+  if (/\.webm/i.test(url)) return "audio/webm";
+  if (/\.wav/i.test(url)) return "audio/wav";
+  if (/\.mp3/i.test(url)) return "audio/mpeg";
+  return "audio/mp4";
+}
+
+/* url -> { src, url, head, dur }；dur 是掐完之后的实际时长 */
 const clips = new Map();
 const clipPending = new Map();
 let actx = null;
@@ -161,15 +169,21 @@ function ensureClip(url) {
   if (!url || clips.has(url)) return Promise.resolve(clips.get(url) || null);
   if (clipPending.has(url)) return clipPending.get(url);
   const job = fetch(url)
-    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("fetch"))))
-    .then((ab) => {
-      const src = URL.createObjectURL(new Blob([ab]));
+    .then((r) => (r.ok
+      ? r.arrayBuffer().then((ab) => ({ ab, type: r.headers.get("content-type") || "" }))
+      : Promise.reject(new Error("fetch"))))
+    .then(({ ab, type }) => {
+      /* 类型一定要带上。Chrome 会嗅探字节，没类型照样播；Safari / iOS 微信
+         对没有 MIME 的 blob 直接拒播，play() 失败就落到 TTS —— 表现就是
+         「老师明明录了音，出来的却是机器声」。 */
+      const mime = /^audio\//.test(type) ? type : guessMime(url);
+      const src = URL.createObjectURL(new Blob([ab], { type: mime }));
       const ctx = audioContext();
       /* 解不了码就只留 blob —— 至少省掉网络那一段 */
-      if (!ctx) return { src, head: 0, dur: 0 };
+      if (!ctx) return { src, url, head: 0, dur: 0 };
       return ctx.decodeAudioData(ab.slice(0))
-        .then((buf) => ({ src, ...edges(buf) }))
-        .catch(() => ({ src, head: 0, dur: 0 }));
+        .then((buf) => ({ src, url, ...edges(buf) }))
+        .catch(() => ({ src, url, head: 0, dur: 0 }));
     })
     .then((clip) => { clips.set(url, clip); clipPending.delete(url); return clip; })
     .catch(() => { clipPending.delete(url); return null; });
@@ -229,7 +243,22 @@ export function playChar(ch, audioMap, opts) {
         ensureClip(url);        // 这次只能将就，下次就快了
       }
       const p = audioEl.play();
-      if (p && p.catch) p.catch(() => speak(ch, opts));   // 自动播放被拦截时退回 TTS
+      /* 退路要一级一级来：blob 播不出（某些浏览器挑剔）先回到原始网址，
+         老师的录音能放就绝不能变成机器音；连原始网址都放不出，才是
+         自动播放被拦或者文件真的坏了，这时候才用 TTS 兜底。 */
+      if (p && p.catch) {
+        p.catch(() => {
+          if (!clip) { speak(ch, opts); return; }
+          clips.delete(url);                    // 这条 blob 不好使，别再用了
+          try {
+            audioEl.src = url;
+            audioEl.currentTime = 0;
+            clearCut();
+            const p2 = audioEl.play();
+            if (p2 && p2.catch) p2.catch(() => speak(ch, opts));
+          } catch (e) { speak(ch, opts); }
+        });
+      }
       return true;
     } catch (e) { /* 落到 TTS */ }
   }
@@ -290,7 +319,14 @@ function playCharAwait(ch, audioMap, opts) {
       if (!clip) ensureClip(url);
       seqEl = el;
       const p = el.play();
-      if (p && p.catch) p.catch(() => { /* 放不出就当放完了，继续下一个 */ });
+      /* 同上：blob 播不出先退回原始网址，别把老师的录音丢了 */
+      if (p && p.catch) {
+        p.catch(() => {
+          if (!clip) return;                    // 放不出就当放完了，继续下一个
+          clips.delete(url);
+          try { el.src = url; el.currentTime = 0; const p2 = el.play(); if (p2 && p2.catch) p2.catch(() => {}); } catch (e) { /* ignore */ }
+        });
+      }
       /* 掐掉尾部空白：念到那儿就算这个字完了，接着念下一个，别干等那一两秒。
          同样要看播放位置 —— 按秒表会在起播没跳成时把字砍断。 */
       const wait = clip && clip.dur
