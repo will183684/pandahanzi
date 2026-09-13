@@ -116,6 +116,82 @@ export function speak(text, { rate = 0.45, times = 1, delay = 0 } = {}) {
   }
 }
 
+/* ---------------- 录音预处理：先下好，并掐掉头尾的空白 ----------------
+
+   翻开卡片后要等一两秒才出声，量下来是两件事各占一半：
+     · 录音文件开头就有 0.5–0.8 秒空白 —— 老师按下麦克风到开口说话那一段，
+       MediaRecorder 忠实地录了进去；
+     · 这个字的录音是点下去才开始下载的，Supabase 冷启动首字节 0.6–1.2 秒。
+
+   所以：进活动时把这一课的录音全部提前抓下来（fetch 进 blob，之后播放
+   不再走网络），顺便解一次码算出真正出声的区间，播的时候直接从那里起播、
+   到那里停。头空白砍了声音就跟手，尾空白砍了拼词语才不会一顿一顿。 */
+
+const SILENCE = 0.02;   // 低于这个振幅算静音
+const HEAD_PAD = 0.04;  // 起播往前留一点，别把字头的爆破音削掉
+const TAIL_PAD = 0.12;  // 结尾多留一点余韵，收得太干听着突兀
+
+/* url -> { src, head, dur }；dur 是掐完之后的实际时长 */
+const clips = new Map();
+const clipPending = new Map();
+let actx = null;
+
+function audioContext() {
+  if (actx) return actx;
+  const Ctor = typeof window !== "undefined" && (window.AudioContext || window.webkitAudioContext);
+  if (!Ctor) return null;
+  try { actx = new Ctor(); } catch (e) { actx = null; }
+  return actx;
+}
+
+function edges(buf) {
+  const d = buf.getChannelData(0);
+  const sr = buf.sampleRate;
+  let head = 0, tail = d.length - 1;
+  while (head < d.length && Math.abs(d[head]) <= SILENCE) head++;
+  while (tail > head && Math.abs(d[tail]) <= SILENCE) tail--;
+  if (head >= tail) return { head: 0, dur: buf.duration };   // 整段都很轻，别乱切
+  const h = Math.max(0, head / sr - HEAD_PAD);
+  const t = Math.min(buf.duration, tail / sr + TAIL_PAD);
+  return { head: h, dur: Math.max(0.15, t - h) };
+}
+
+/* 把一条录音抓下来、量好头尾。重复调用只做一次。 */
+function ensureClip(url) {
+  if (!url || clips.has(url)) return Promise.resolve(clips.get(url) || null);
+  if (clipPending.has(url)) return clipPending.get(url);
+  const job = fetch(url)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error("fetch"))))
+    .then((ab) => {
+      const src = URL.createObjectURL(new Blob([ab]));
+      const ctx = audioContext();
+      /* 解不了码就只留 blob —— 至少省掉网络那一段 */
+      if (!ctx) return { src, head: 0, dur: 0 };
+      return ctx.decodeAudioData(ab.slice(0))
+        .then((buf) => ({ src, ...edges(buf) }))
+        .catch(() => ({ src, head: 0, dur: 0 }));
+    })
+    .then((clip) => { clips.set(url, clip); clipPending.delete(url); return clip; })
+    .catch(() => { clipPending.delete(url); return null; });
+  clipPending.set(url, job);
+  return job;
+}
+
+/* 进一个活动时先把这一课的录音抓下来。之后翻卡片就是本地播放，没有等待。 */
+export function preloadAudio(audioMap, chars) {
+  if (!audioMap || typeof fetch === "undefined") return;
+  const want = chars && chars.length ? chars : Object.keys(audioMap);
+  want.forEach((ch) => { const u = audioMap[ch]; if (u && /^https?:/.test(u)) ensureClip(u); });
+}
+
+/* 播到掐好的结尾就停 —— 免得把尾巴那一两秒空白也放完 */
+let cutTimer = null;
+function armCut(el, dur) {
+  if (cutTimer) { clearTimeout(cutTimer); cutTimer = null; }
+  if (!dur) return;
+  cutTimer = setTimeout(() => { try { el.pause(); } catch (e) { /* ignore */ } }, dur * 1000 + 60);
+}
+
 /* 放一个字：有老师录音就放录音，否则 TTS。 */
 export function playChar(ch, audioMap, opts) {
   stopAudio();   // 停止任何正在播放的音
@@ -123,8 +199,16 @@ export function playChar(ch, audioMap, opts) {
   if (url) {
     try {
       if (!audioEl) audioEl = new window.Audio();
-      audioEl.src = url;
-      audioEl.currentTime = 0;
+      const clip = clips.get(url);
+      if (clip) {
+        if (audioEl.src !== clip.src) audioEl.src = clip.src;
+        audioEl.currentTime = clip.head;
+        armCut(audioEl, clip.dur);
+      } else {
+        audioEl.src = url;
+        audioEl.currentTime = 0;
+        ensureClip(url);        // 这次只能将就，下次就快了
+      }
       const p = audioEl.play();
       if (p && p.catch) p.catch(() => speak(ch, opts));   // 自动播放被拦截时退回 TTS
       return true;
@@ -164,11 +248,19 @@ function playCharAwait(ch, audioMap, opts) {
       const el = new window.Audio();
       el.preload = "auto";
       el.playsInline = true;
-      el.src = url;
+      const clip = clips.get(url);
+      el.src = clip ? clip.src : url;
+      if (clip && clip.head) el.currentTime = clip.head;
+      if (!clip) ensureClip(url);
       seqEl = el;
       const p = el.play();
       if (p && p.catch) p.catch(() => { /* 放不出就当放完了，继续下一个 */ });
-      return waitFor(el, 6000).then(() => { if (seqEl === el) seqEl = null; });
+      /* 掐掉尾部空白：到点就算这个字念完了，接着念下一个，别干等那一两秒 */
+      const limit = clip && clip.dur ? clip.dur * 1000 + 60 : 6000;
+      return waitFor(el, limit).then(() => {
+        try { el.pause(); } catch (e) { /* ignore */ }
+        if (seqEl === el) seqEl = null;
+      });
     } catch (e) { /* 落到 TTS */ }
   }
   return speakAwait(ch, opts);
@@ -213,6 +305,7 @@ export async function playSequence(chars, audioMap, { gap = 140, rate = 0.5 } = 
 /* 离开活动时收尾，免得声音继续放。 */
 export function stopAudio() {
   seqToken++;                                    // 让在跑的队列不再往下排
+  if (cutTimer) { clearTimeout(cutTimer); cutTimer = null; }
   try { if (seqEl) { seqEl.pause(); seqEl.src = ""; seqEl = null; } } catch (e) { /* ignore */ }
   try { if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; } } catch (e) { /* ignore */ }
   try {
