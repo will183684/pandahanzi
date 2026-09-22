@@ -36,7 +36,14 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
     return stopAudio;
   }, [showFinale]);
 
-  const messages = ["继续加油，PanPan陪着你！", "你做得真好！", "再来一个就更厉害啦！", "了不起，快完成啦！", "全部完成，太厉害啦！"];
+  /* 「全部完成」这句只能在真的全做完时说。
+     以前是 messages[Math.min(doneCount, 4)]，而活动有 6 个、鼓励语只有 5 条 ——
+     做完 4 项就已经在喊「全部完成，太厉害啦！」，家长照着这句话退出来，
+     发现少了两颗星，还以为是星星丢了。 */
+  const progressMsgs = ["继续加油，PanPan陪着你！", "你做得真好！", "再来一个就更厉害啦！", "了不起，快完成啦！"];
+  const message = allDone
+    ? "全部完成，太厉害啦！"
+    : progressMsgs[Math.min(doneCount, progressMsgs.length - 1)];
   const lv = meta.level ? LEVEL_BY_NO[meta.level] : null;
 
   return (
@@ -111,7 +118,7 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
         ))}
       </div>
       <p style={{ textAlign: "center", color: C.bamboo, fontWeight: 700, marginTop: 8 }}>
-        {messages[Math.min(doneCount, messages.length - 1)]}
+        {message}
       </p>
 
       <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 18, flexWrap: "wrap" }}>

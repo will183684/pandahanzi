@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { C } from "../theme";
 import { BigButton } from "../components/ui";
 import { playChar, stopAudio } from "../audio";
@@ -38,6 +38,18 @@ export default function FlashcardActivity({ meta, onDone }) {
   }, [flipped, chars, idx, meta.audioMap]);
 
   useEffect(() => stopAudio, []);
+
+  /* 十张卡都翻过就算做完，自动记一笔。
+     别的活动都是最后一题做完自动结束，只有这里还要再点一下金色按钮 ——
+     孩子翻完直接点「返回」，练是练了，星星一颗没有。
+     下面那个按钮留着：用作再确认，也给自动没触发时一条退路。 */
+  const doneRef = useRef(false);
+  useEffect(() => { doneRef.current = false; }, [chars]);
+  useEffect(() => {
+    if (!allRead || doneRef.current) return;
+    doneRef.current = true;
+    onDone();
+  }, [allRead, onDone]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
