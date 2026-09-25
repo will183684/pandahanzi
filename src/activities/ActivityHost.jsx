@@ -44,7 +44,9 @@ export default function ActivityHost({ activityIndex, meta, readOnly, done, avat
   }, [onBack]);
 
   let inner = null;
-  if (def.key === "flash") inner = <FlashcardActivity meta={meta} onDone={finish} />;
+  /* 重做一遍就打乱卡片顺序 —— 第二遍还按原顺序，孩子很容易靠「第三张是马」
+     的位置记忆蒙过去，没真认字。第一遍不打乱：那是老师排的课文顺序。 */
+  if (def.key === "flash") inner = <FlashcardActivity meta={meta} onDone={finish} shuffle={done || round > 0} />;
   else if (def.key === "listen") inner = <ListenActivity meta={meta} onDone={finish} />;
   else if (def.key === "find") inner = <FindActivity meta={meta} onDone={finish} />;
   else if (def.key === "trace") inner = <TraceActivity meta={meta} onDone={finish} />;
