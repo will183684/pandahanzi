@@ -1,5 +1,6 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { ACTIVITIES, C } from "../theme";
+import { preloadAudio } from "../audio";
 import { Card, CelebrationOverlay } from "../components/ui";
 import FlashcardActivity from "./FlashcardActivity";
 import FindActivity from "./FindActivity";
@@ -19,6 +20,13 @@ export default function ActivityHost({ activityIndex, meta, readOnly, done, avat
   const [round, setRound] = useState(0);
   const def = ACTIVITIES[activityIndex];
 
+  /* 一进活动就把这一课的录音全抓下来。等孩子翻到卡片时已经在本地了，
+     点下去就出声 —— 否则每个字第一次播都要等一次网络往返。 */
+  useEffect(() => {
+    preloadAudio(meta.audioMap, meta.chars);
+    if (meta.wordAudioMap) preloadAudio(meta.wordAudioMap, null);
+  }, [meta.audioMap, meta.chars, meta.wordAudioMap]);
+
   /* 完成即记录，不等孩子点关闭 —— 中途关掉页面也不会丢进度 */
   const finish = useCallback(() => {
     if (!readOnly) onComplete(activityIndex);
@@ -36,7 +44,9 @@ export default function ActivityHost({ activityIndex, meta, readOnly, done, avat
   }, [onBack]);
 
   let inner = null;
-  if (def.key === "flash") inner = <FlashcardActivity meta={meta} onDone={finish} />;
+  /* 重做一遍就打乱卡片顺序 —— 第二遍还按原顺序，孩子很容易靠「第三张是马」
+     的位置记忆蒙过去，没真认字。第一遍不打乱：那是老师排的课文顺序。 */
+  if (def.key === "flash") inner = <FlashcardActivity meta={meta} onDone={finish} shuffle={done || round > 0} />;
   else if (def.key === "listen") inner = <ListenActivity meta={meta} onDone={finish} />;
   else if (def.key === "find") inner = <FindActivity meta={meta} onDone={finish} />;
   else if (def.key === "trace") inner = <TraceActivity meta={meta} onDone={finish} />;

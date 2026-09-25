@@ -12,9 +12,22 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
   const allDone = doneCount === ACTIVITIES.length;
   const [showFinale, setShowFinale] = useState(false);
 
+  /* 「本周全部完成」这一屏是全屏遮罩，一课只该庆祝一次。
+
+     以前的写法是「只要全做完了就弹」，而每次从活动返回首页都是一次重新
+     挂载 —— 于是第二遍练习时，每做完一个活动回到首页就被它盖住一次。
+     孩子照着卡片点，点的全是遮罩，看起来就是「练习卡住了、点了没反应」。
+
+     用 localStorage 记住这一课庆祝过了。换一课（meta.id 变）自然会再庆祝。 */
+  const finaleKey = `panda_finale:${studentName}:${meta && meta.id}`;
   useEffect(() => {
-    if (allDone && !readOnly) setShowFinale(true);
-  }, [allDone, readOnly]);
+    if (!allDone || readOnly || !meta || !meta.id) return;
+    let seen = false;
+    try { seen = localStorage.getItem(finaleKey) === "1"; } catch (e) { /* 隐私模式下读不到就当没庆祝过 */ }
+    if (seen) return;
+    try { localStorage.setItem(finaleKey, "1"); } catch (e) { /* ignore */ }
+    setShowFinale(true);
+  }, [allDone, readOnly, meta, finaleKey]);
 
   /* 本周全部做完时也念一句 */
   useEffect(() => {
@@ -23,7 +36,14 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
     return stopAudio;
   }, [showFinale]);
 
-  const messages = ["继续加油，胖胖陪着你！", "你做得真好！", "再来一个就更厉害啦！", "了不起，快完成啦！", "全部完成，太厉害啦！"];
+  /* 「全部完成」这句只能在真的全做完时说。
+     以前是 messages[Math.min(doneCount, 4)]，而活动有 6 个、鼓励语只有 5 条 ——
+     做完 4 项就已经在喊「全部完成，太厉害啦！」，家长照着这句话退出来，
+     发现少了两颗星，还以为是星星丢了。 */
+  const progressMsgs = ["继续加油，PanPan陪着你！", "你做得真好！", "再来一个就更厉害啦！", "了不起，快完成啦！"];
+  const message = allDone
+    ? "全部完成，太厉害啦！"
+    : progressMsgs[Math.min(doneCount, progressMsgs.length - 1)];
   const lv = meta.level ? LEVEL_BY_NO[meta.level] : null;
 
   return (
@@ -98,7 +118,7 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
         ))}
       </div>
       <p style={{ textAlign: "center", color: C.bamboo, fontWeight: 700, marginTop: 8 }}>
-        {messages[Math.min(doneCount, messages.length - 1)]}
+        {message}
       </p>
 
       <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 18, flexWrap: "wrap" }}>
@@ -113,22 +133,31 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
       </div>
 
       {showFinale && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 60, background: "rgba(253,246,236,0.97)",
-          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-          textAlign: "center", padding: 24,
-        }}>
+        /* 点哪儿都能关掉 —— 五六岁的孩子不会去找那个「继续看看」，
+           挡在前面又点不动，就以为是坏了。 */
+        <div
+          onClick={() => setShowFinale(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 60, background: "rgba(253,246,236,0.97)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            textAlign: "center", padding: 24, cursor: "pointer",
+          }}
+        >
           <Confetti count={120} />
           <div style={{ animation: "pa-jump 0.7s ease-in-out infinite" }}>
             <Panda sz={170} avatar={avatar} />
           </div>
           <div style={{ fontSize: 44, letterSpacing: 8, marginTop: 6 }}>🎓</div>
           <h2 style={{ fontSize: 26, margin: "8px 0" }}>本周全部完成！</h2>
-          <p style={{ fontSize: 18, color: "#6B6356" }}>胖胖为你鼓掌！👏</p>
-          <div style={{ display: "flex", gap: 14, marginTop: 18, flexWrap: "wrap", justifyContent: "center" }}>
+          <p style={{ fontSize: 18, color: "#6B6356" }}>PanPan为你鼓掌！👏</p>
+          <div
+            onClick={(ev) => ev.stopPropagation()}
+            style={{ display: "flex", gap: 14, marginTop: 18, flexWrap: "wrap", justifyContent: "center", position: "relative", zIndex: 1 }}
+          >
             <BigButton color={C.gold} onClick={() => { setShowFinale(false); onOpenArchive(); }}>查看历史记录 📚</BigButton>
             <BigButton color={C.bamboo} light onClick={() => setShowFinale(false)}>继续看看</BigButton>
           </div>
+          <p style={{ fontSize: 13, color: "#9C9382", marginTop: 14 }}>点任意地方继续</p>
         </div>
       )}
     </div>

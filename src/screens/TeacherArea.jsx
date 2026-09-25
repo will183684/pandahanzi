@@ -135,6 +135,7 @@ export default function TeacherArea({
           curriculum={curriculum}
           myClassIds={isAdmin ? null : myClassIds}
           activeClassId={activeClassId}
+          session={session}
           pushToast={pushToast}
         />
       )}
