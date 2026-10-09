@@ -3,6 +3,7 @@ import { C } from "../theme";
 import { BigButton } from "../components/ui";
 import { shuffled } from "../utils";
 import { playChar, stopAudio } from "../audio";
+import { wordsFor } from "../wordExamples";
 
 /* ===================================================================
    ACTIVITY 1 — 认一认 (Flashcards)
@@ -33,6 +34,7 @@ export default function FlashcardActivity({ meta, onDone, shuffle = false }) {
   const idx = deck[pos] ?? 0;                          // 当前这张是字表里的第几个字
   const allRead = read.size >= chars.length;
   const thisRead = read.has(idx);
+  const examples = wordsFor(chars[idx], meta.vocab);
 
   /* 换课文了就重新发牌 */
   useEffect(() => { setDeck(newDeck(shuffle)); setPos(0); setRead(new Set()); }, [newDeck, shuffle]);
@@ -122,6 +124,18 @@ export default function FlashcardActivity({ meta, onDone, shuffle = false }) {
             <span style={{ fontSize: 76, fontWeight: 800, lineHeight: 1 }}>{chars[idx]}</span>
             <span style={{ fontSize: 30, color: C.bamboo, fontWeight: 700 }}>{meta.pinyins[idx] || ""}</span>
             <span style={{ fontSize: 36 }}>{meta.emojiMap[chars[idx]] || "✨"}</span>
+            {/* 组词举例：认一个孤零零的字，孩子不知道它用在哪儿。
+                本课正在教的词排前面，不够再用常用词补；一个都没有就不占地方。 */}
+            {examples.length > 0 && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 2 }}>
+                {examples.map((w) => (
+                  <span key={w} style={{
+                    background: "#EAF6EC", border: `1px solid ${C.bamboo}44`, borderRadius: 999,
+                    padding: "3px 12px", fontSize: 20, fontWeight: 700, color: "#4A7A50",
+                  }}>{w}</span>
+                ))}
+              </div>
+            )}
             <div style={{
               marginTop: 6, background: "#FFF1F0", border: `2px solid ${C.red}44`,
               borderRadius: 999, padding: "5px 14px", fontSize: 15, fontWeight: 800, color: C.red,
