@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { C } from "../theme";
 import { BigButton } from "../components/ui";
 import { shuffled } from "../utils";
-import { playChar, stopAudio } from "../audio";
+import { playChar, playSequence, stopAudio } from "../audio";
 import { wordsFor } from "../wordExamples";
 
 /* ===================================================================
@@ -35,6 +35,13 @@ export default function FlashcardActivity({ meta, onDone, shuffle = false }) {
   const allRead = read.size >= chars.length;
   const thisRead = read.has(idx);
   const examples = wordsFor(chars[idx], meta.vocab);
+
+  /* 点词语也能听。和「拼词语」用同一套：老师录过整词就放整词，
+     没录就把单字录音一个个接起来，都没有才退回机器音。 */
+  const sayWord = useCallback((w) => {
+    const url = (meta.wordAudioMap || {})[w];
+    return url ? playSequence([w], { [w]: url }) : playSequence(w.split(""), meta.audioMap);
+  }, [meta.wordAudioMap, meta.audioMap]);
 
   /* 换课文了就重新发牌 */
   useEffect(() => { setDeck(newDeck(shuffle)); setPos(0); setRead(new Set()); }, [newDeck, shuffle]);
@@ -129,19 +136,19 @@ export default function FlashcardActivity({ meta, onDone, shuffle = false }) {
             {examples.length > 0 && (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 2 }}>
                 {examples.map((w) => (
-                  <span key={w} style={{
-                    background: "#EAF6EC", border: `1px solid ${C.bamboo}44`, borderRadius: 999,
-                    padding: "3px 12px", fontSize: 20, fontWeight: 700, color: "#4A7A50",
-                  }}>{w}</span>
+                  <button
+                    key={w}
+                    onClick={(ev) => { ev.stopPropagation(); sayWord(w); }}
+                    title="听这个词"
+                    style={{
+                      background: "#EAF6EC", border: `1px solid ${C.bamboo}44`, borderRadius: 999,
+                      padding: "4px 14px", fontSize: 20, fontWeight: 700, color: "#4A7A50",
+                      cursor: "pointer", minHeight: 36,
+                    }}
+                  >{w} 🔊</button>
                 ))}
               </div>
             )}
-            <div style={{
-              marginTop: 6, background: "#FFF1F0", border: `2px solid ${C.red}44`,
-              borderRadius: 999, padding: "5px 14px", fontSize: 15, fontWeight: 800, color: C.red,
-            }}>
-              🗣️ 大声跟读一遍
-            </div>
             <button
               onClick={(ev) => { ev.stopPropagation(); playChar(chars[idx], meta.audioMap); }}
               aria-label="再听一次"
