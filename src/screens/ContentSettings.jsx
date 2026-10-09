@@ -4,12 +4,19 @@ import { Card, BigButton, ConfirmDialog } from "../components/ui";
 import { supabase, getSharedAudioByHanzi, getWordAudios } from "../supabaseClient";
 import { pickRecorderMime, toPlayableBlob, extFor } from "../recordingFormat";
 import { playSequence, stopAudio } from "../audio";
+import { wordsFor } from "../wordExamples";
 
 /* ===================================================================
    本课内容设置 —— 编辑本班当前这节课：
    逐字改拼音 / 配表情 / 录音 / 增删字，外加词语和句子。
    所有改动只落在本班的副本上，不影响课程库。
    =================================================================== */
+/* 早期的录音是直接把音频塞进 data: URL 存库的，那种放不出来（学生端
+   会退回机器音）。库里还剩几条这样的旧数据。它们在界面上要显示成
+   「失效，请重录」—— 原来显示「📻 滕老师」，老师看着像好好的，
+   不会去重录，字就一直是机器音。重录一次就自动换成正常的文件地址。 */
+const playable = (u) => !!u && /^https?:/.test(String(u));
+
 export default function ContentSettings({
   lesson, lessonNo, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onBack, pushToast, busy,
   /* editMode：从「课程编辑」进来的，只改内容 —— 藏掉「换一课 / 完成本课」
@@ -46,7 +53,9 @@ export default function ContentSettings({
     setSentence(lesson.sentence || "");
     setRows(list.map((c) => ({
       hanzi: c.hanzi, pinyin: c.pinyin || "", emoji: c.emoji || "",
-      audio_url: c.audio_url || null, audio_by: c.audio_by || null,
+      audio_url: playable(c.audio_url) ? c.audio_url : null,
+      audio_by: playable(c.audio_url) ? (c.audio_by || null) : null,
+      stale: !!c.audio_url && !playable(c.audio_url),
     })));
     setDirty(false);
   }, [lesson, chars, charsFor]);
@@ -175,19 +184,40 @@ export default function ContentSettings({
     stopTracks();
   }, []);
 
+  const vocabWords = useMemo(
+    () => vocabStr.split(/\s+/).map((w) => w.trim()).filter(Boolean),
+    [vocabStr]
+  );
+
+  /* 「认一认」翻到背面会给每个字一个组词，孩子点一下就念。那些词多半
+     不在词语栏里（「伞」配的是「雨伞」，而本课词语是小鸟大鱼白云木门），
+     老师在这一页就既看不到、也录不了 —— 「雨伞」的「雨」于是一直是机器音。
+     所以把它们也算进来：下面的整词录音和「其他字」都要包含这一批。 */
+  const exampleWords = useMemo(() => {
+    const out = [];
+    rows.forEach((r) => {
+      const h = (r.hanzi || "").trim();
+      if (!h) return;
+      wordsFor(h, vocabWords).forEach((w) => {
+        if (!vocabWords.includes(w) && !out.includes(w)) out.push(w);
+      });
+    });
+    return out;
+  }, [rows, vocabWords]);
+
   /* 词语和句子里可能用到别的课的字（比如本课有「午」，词语「中午」还要
      一个「中」）。那些字不在本课字表里，老师就没地方录 —— 单独列出来。
      录音是按字全局共用的，在哪一课录都一样。 */
   const extraChars = useMemo(() => {
     const inLesson = new Set(rows.map((r) => (r.hanzi || "").trim()).filter(Boolean));
     const out = [];
-    (vocabStr + sentence).split("").forEach((ch) => {
+    (vocabStr + sentence + exampleWords.join("")).split("").forEach((ch) => {
       if (!/[\u4e00-\u9fa5]/.test(ch)) return;      // 空格标点跳过
       if (inLesson.has(ch) || out.includes(ch)) return;
       out.push(ch);
     });
     return out;
-  }, [vocabStr, sentence, rows]);
+  }, [vocabStr, sentence, rows, exampleWords]);
 
   const [extraAudio, setExtraAudio] = useState({});   // 汉字 -> {audio_url, audio_by}
 
@@ -205,8 +235,8 @@ export default function ContentSettings({
   /* 整词录音。第 31 课（L4）起「拼词语」是纯听力，孩子看不到字，
      只能靠听 —— 这时必须是老师念的整词，单字接起来没有连读和变调。 */
   const wordList = useMemo(
-    () => vocabStr.split(/\s+/).map((w) => w.trim()).filter(Boolean),
-    [vocabStr]
+    () => [...vocabWords, ...exampleWords],
+    [vocabWords, exampleWords]
   );
   const needWordAudio = !!(lessonNo && lessonNo >= 31);   // L4 起是纯听力
   const [wordAudio, setWordAudio] = useState({});   // 词 -> {audio_url, audio_by}
@@ -220,7 +250,9 @@ export default function ContentSettings({
         const next = { ...prev };
         need.forEach((w) => {
           const v = m.get(w);
-          next[w] = v ? { audio_url: v.audio_url, audio_by: v.teacher_name } : { audio_url: null };
+          next[w] = v && playable(v.audio_url)
+            ? { audio_url: v.audio_url, audio_by: v.teacher_name }
+            : { audio_url: null, stale: !!(v && v.audio_url) };
         });
         return next;
       });
@@ -246,7 +278,9 @@ export default function ContentSettings({
         const next = { ...prev };
         need.forEach((ch) => {
           const s2 = m.get(ch);
-          next[ch] = s2 ? { audio_url: s2.audio_url, audio_by: s2.teacher_name } : { audio_url: null };
+          next[ch] = s2 && playable(s2.audio_url)
+            ? { audio_url: s2.audio_url, audio_by: s2.teacher_name }
+            : { audio_url: null, stale: !!(s2 && s2.audio_url) };
         });
         return next;
       });
@@ -457,11 +491,17 @@ export default function ContentSettings({
                 </span>
               </>
             ) : (
-              <button onClick={() => startRec(`row:${i}`, setRowAudio(i))} title="录 3 秒" style={{
-                minHeight: 44, padding: "0 12px", borderRadius: 10,
-                border: `2px solid ${C.border}`,
-                background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#8A8276",
-              }}>🎤 录音</button>
+              <>
+                <button onClick={() => startRec(`row:${i}`, setRowAudio(i))} title="录 3 秒" style={{
+                  minHeight: 44, padding: "0 12px", borderRadius: 10,
+                  border: `2px solid ${r.stale ? C.red : C.border}`,
+                  background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 700,
+                  color: r.stale ? C.red : "#8A8276",
+                }}>🎤 录音</button>
+                {r.stale && (
+                  <span style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>旧录音已失效，请重录</span>
+                )}
+              </>
             )}
             <span style={{ display: libraryMode ? "none" : "flex", gap: 2 }}>
               <button onClick={() => moveRow(i, -1)} disabled={i === 0} style={{
@@ -539,6 +579,9 @@ export default function ContentSettings({
               先点「🔗 听拼接」听听孩子现在听到的效果 —— 那是把单字录音一个个接起来的。
               觉得别扭（连读、变调不对）就自己念一遍整个词，学生端会优先放你录的这一段。
               {needWordAudio && <b style={{ color: C.red }}>　第 31 课起「拼词语」不给字看，孩子只能靠听，这一课必须录。</b>}
+              {exampleWords.length > 0 && (
+                <>　带「认一认」标的是翻卡片时给的组词，孩子点一下就念，录不录都行。</>
+              )}
             </p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {wordList.map((w) => {
@@ -549,6 +592,12 @@ export default function ContentSettings({
                     background: "#fff", border: `2px solid ${C.border}`, borderRadius: 10, padding: "6px 10px",
                   }}>
                     <span style={{ fontSize: 22, fontWeight: 800, minWidth: 64 }}>{w}</span>
+                    {exampleWords.includes(w) && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, color: "#8A8276", background: "#F5EFE7",
+                        borderRadius: 6, padding: "2px 6px", whiteSpace: "nowrap",
+                      }}>认一认</span>
+                    )}
                     {/* 先让老师听见「现在是什么效果」，再决定要不要自己录 */}
                     <button onClick={() => playConcat(w)} title="单字录音接起来的效果，也就是孩子现在听到的"
                       style={{
@@ -588,7 +637,8 @@ export default function ContentSettings({
                           color: needWordAudio ? C.red : "#8a6d12",
                         }}>🎤 录整个词</button>
                         <span style={{ fontSize: 12, color: needWordAudio ? C.red : "#B7AE9F" }}>
-                          {needWordAudio ? "还没录，孩子听不出这个词" : "还没录，会用单字接起来念"}
+                          {a.stale ? "旧录音已失效，请重录"
+                            : needWordAudio ? "还没录，孩子听不出这个词" : "还没录，会用单字接起来念"}
                         </span>
                       </>
                     )}
@@ -651,7 +701,9 @@ export default function ContentSettings({
                           minHeight: 44, padding: "0 12px", borderRadius: 10, border: `2px solid ${C.gold}`,
                           background: "#fff", cursor: "pointer", fontSize: 15, fontWeight: 700, color: "#8a6d12",
                         }}>🎤 录音</button>
-                        <span style={{ fontSize: 12, color: "#B7AE9F" }}>还没人录，现在是机器音</span>
+                        <span style={{ fontSize: 12, color: a.stale ? C.red : "#B7AE9F" }}>
+                          {a.stale ? "旧录音已失效，现在是机器音，请重录" : "还没人录，现在是机器音"}
+                        </span>
                       </>
                     )}
                   </div>
