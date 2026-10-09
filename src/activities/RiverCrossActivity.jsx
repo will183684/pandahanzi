@@ -45,7 +45,7 @@ export default function RiverCrossActivity({ meta, onDone }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-      <p style={{ fontSize: 16, color: "#6B6356" }}>按句子的顺序踩石头，帮胖胖过河回家！</p>
+      <p style={{ fontSize: 16, color: "#6B6356" }}>按句子的顺序踩石头，帮PanPan过河回家！</p>
 
       {/* sentence progress with blank for the current spot */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>

@@ -38,6 +38,11 @@ function loadHanziWriter() {
 
 const BOX = 260;
 
+/* 错几笔就判定「不会写」，直接过下一个字。
+   写错 3 笔基本就是不认得这个字了，硬让他写对才放行只是在耗时间，
+   孩子会烦，后面的题也就测不准了。 */
+const MAX_MISTAKES = 3;
+
 function WritingItem({ char, onResult }) {
   const boxRef = useRef(null);
   const [state, setState] = useState("loading");   // loading | writing | failed
@@ -61,12 +66,20 @@ function WritingItem({ char, onResult }) {
           onLoadCharDataError: () => { if (alive && !settled.current) { settled.current = true; setState("failed"); onResult(null); } },
         });
         setState("writing");
+        let misses = 0;
         writer.quiz({
           leniency: 1.4,
-          /* 测评不该卡死孩子：错 3 次给个提示让他能写完，
-             但提示不改判定 —— 错过就是错过。 */
-          showHintAfterMisses: 3,
+          showHintAfterMisses: false,
           highlightOnComplete: true,
+          onMistake: () => {
+            misses += 1;
+            if (misses < MAX_MISTAKES || settled.current) return;
+            /* 到 3 笔就收工：判不会，停掉这个字，别再让他试。 */
+            settled.current = true;
+            setState("gaveup");
+            try { if (writer && writer.cancelQuiz) writer.cancelQuiz(); } catch (e) { /* ignore */ }
+            onResult(false);
+          },
           onComplete: ({ totalMistakes }) => {
             if (settled.current) return;
             settled.current = true;
@@ -98,6 +111,7 @@ function WritingItem({ char, onResult }) {
         </div>
         {state === "loading" && <span style={{ color: "#9C9382", fontSize: 15 }}>正在加载笔顺…</span>}
         {state === "failed" && <span style={{ color: "#9C9382", fontSize: 15 }}>这个字没有笔顺数据，跳过</span>}
+        {state === "gaveup" && <span style={{ color: "#9C9382", fontSize: 16 }}>这个字先放一放，看下一个 →</span>}
         <div ref={boxRef} style={{ width: BOX, height: BOX, touchAction: "none", display: state === "writing" ? "block" : "none" }} />
       </div>
       <p style={{ fontSize: 14, color: "#9C9382", margin: 0 }}>按笔顺一笔一笔写出来</p>
@@ -115,6 +129,12 @@ export default function Assessment({ curriculum, currentLevel, studentName, onEx
   const [correct, setCorrect] = useState(0);
   const [picked, setPicked] = useState(null);       // 刚点的选项，用于显示对错
   const [audioMap, setAudioMap] = useState({});
+  /* 老师录音是异步捞回来的。捞回来之前 audioMap 还是空的，
+     自动播放那个 effect 会先用机器音念一遍，等录音到了 audioMap 一变
+     又念第二遍 —— 孩子听到的就是同一个字说两次。
+     所以：录音没到位不播；每道题只播一次，用 playedRef 记住播过谁。 */
+  const [audioReady, setAudioReady] = useState(false);
+  const playedRef = useRef(null);
   /* 本板块真正判过分的题数。全都判不了（比如整批字都没有笔顺数据）时，
      不能当成"全错"报成最低级 —— 那是数据缺失，不是孩子不会。 */
   const scoredRef = useRef(0);
@@ -129,13 +149,15 @@ export default function Assessment({ curriculum, currentLevel, studentName, onEx
     setItems(list);
     setIi(0); setCorrect(0); setPicked(null);
     if (sectionKey === "recognize") {
+      setAudioReady(false);
       getSharedAudioByHanzi(list.map((i) => i.answer))
         .then((m) => {
           const out = {};
           m.forEach((v, h) => { if (v.audio_url) out[h] = v.audio_url; });
           setAudioMap(out);
         })
-        .catch(() => setAudioMap({}));
+        .catch(() => setAudioMap({}))
+        .finally(() => setAudioReady(true));
     }
   }, [curriculum]);
 
@@ -150,12 +172,15 @@ export default function Assessment({ curriculum, currentLevel, studentName, onEx
 
   useEffect(() => stopAudio, []);
 
-  /* 识字量：进到新题自动放一次音 */
+  /* 识字量：进到新题自动放一次音（只放一次，见 playedRef） */
   useEffect(() => {
-    if (phase !== "running" || !item || item.kind !== "recognize") return undefined;
+    if (phase !== "running" || !item || item.kind !== "recognize" || !audioReady) return undefined;
+    const key = `${si}-${st ? st.level : 0}-${ii}-${item.answer}`;
+    if (playedRef.current === key) return undefined;
+    playedRef.current = key;
     const t = setTimeout(() => playChar(item.answer, audioMap), 300);
     return () => clearTimeout(t);
-  }, [phase, item, audioMap]);
+  }, [phase, item, audioMap, audioReady, si, st, ii]);
 
   /* 一题结束 -> 下一题 / 下一轮 / 下一个板块 */
   const finishItem = useCallback((ok) => {

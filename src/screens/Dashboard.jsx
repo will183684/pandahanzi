@@ -12,11 +12,16 @@ export default function Dashboard({ roster, progressRows, lesson, profiles }) {
     [progressRows, lesson]
   );
 
-  /* 名单为主；名单外但有记录的学生也列出来（比如名册还没加） */
+  /* 以班级名单为准。学生从班里移出去之后，他的练习记录还留在库里
+     （改名要保留历史，所以记录不删），原来这里把名单和「有记录的人」
+     取并集，人就靠旧记录又冒出来了 —— 已经不在这个班的人，不该占着
+     老师的进度表。
+
+     只有名单整个是空的时候才退回按记录列：那多半是名册还没填，
+     这时候一片空白反而让老师以为坏了。 */
   const names = useMemo(() => {
-    const set = new Set(roster && roster.length ? roster : []);
-    rows.forEach((r) => set.add(r.student_name));
-    return [...set];
+    if (roster && roster.length) return [...roster];
+    return [...new Set(rows.map((r) => r.student_name))];
   }, [roster, rows]);
 
   const doneOf = (name, key) => rows.some((r) => r.student_name === name && r.activity_key === key);

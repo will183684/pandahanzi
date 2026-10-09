@@ -8,6 +8,7 @@ import {
 } from "./supabaseClient";
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
+import { preloadAudio } from "./audio";
 import Panda from "./components/Panda";
 import { Toast, Shell, BigButton } from "./components/ui";
 import ActivityHost from "./activities/ActivityHost";
@@ -222,6 +223,14 @@ export default function PandaHanziApp() {
     () => toMeta(viewLesson, viewChars, curriculum, extraAudio, wordAudio),
     [viewLesson, viewChars, curriculum, extraAudio, wordAudio]
   );
+
+  /* 课文一到手就开始抓录音 —— 孩子还在首页挑活动的这几秒，正好把这一课的
+     音都下到本地，翻开卡片就不用等网络了。 */
+  useEffect(() => {
+    if (!viewMeta) return;
+    preloadAudio(viewMeta.audioMap, viewMeta.chars);
+    if (viewMeta.wordAudioMap) preloadAudio(viewMeta.wordAudioMap, null);
+  }, [viewMeta]);
 
   const who = session && session.role === "parent" ? session.name : null;
   const viewProgress = useMemo(

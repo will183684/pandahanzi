@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { C } from "../theme";
 import { shuffled } from "../utils";
+import { playChar, stopAudio } from "../audio";
 
 /* ===================================================================
    ACTIVITY 2 — 找一找 (Find the character)
@@ -81,6 +82,11 @@ export default function FindActivity({ meta, onDone }) {
 
   const onTap = useCallback((b) => {
     if (b.gone) return;
+    /* 点谁念谁 —— 点中了听见自己找的那个字，点错了也听见点的是什么，
+       正好知道自己抓错了哪个。念目标字是不行的：那等于把答案报出来，
+       这一项就成了「听一听」。
+       气泡里混着别的课的干扰字，那些字本课没有录音，会退回机器音。 */
+    playChar(b.ch, meta.audioMap);
     if (b.ch === current) {
       setBubbles((list) => list.map((x) => (x.id === b.id ? { ...x, gone: true } : x)));
       // onDone 会改父组件的 state，不能放进 setTargetIdx 的 updater 里
@@ -93,7 +99,9 @@ export default function FindActivity({ meta, onDone }) {
       setShakeId(b.id);
       setTimeout(() => setShakeId(null), 450);
     }
-  }, [current, targetIdx, targets.length, onDone]);
+  }, [current, targetIdx, targets.length, onDone, meta.audioMap]);
+
+  useEffect(() => stopAudio, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
@@ -102,6 +110,9 @@ export default function FindActivity({ meta, onDone }) {
         <span style={{ fontSize: 48, fontWeight: 800, color: C.red, lineHeight: 1 }}>{current}</span>
         <span style={{ fontSize: 15, color: "#8A8276" }}>（{targetIdx + 1}/{targets.length}）</span>
       </div>
+      <p style={{ fontSize: 15, fontWeight: 800, color: C.red, margin: 0 }}>
+        🗣️ 点到了跟着大声读一遍！
+      </p>
       <div ref={boardRef} style={{
         position: "relative", width: "100%", maxWidth: 720, height: BOARD_H,
         background: "linear-gradient(135deg,#FFE9F1 0%,#FFF3DE 30%,#E7F6FF 62%,#E6F8EC 100%)",

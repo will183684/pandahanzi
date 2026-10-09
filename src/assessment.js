@@ -21,12 +21,15 @@ export const SECTIONS = [
 ];
 
 /* 一级考几题、答对几题算过。
-   4 题里对 3 题（75%）才算掌握 —— 四选一蒙对的概率是 25%，
-   门槛定低了会把瞎蒙当成会。 */
-export const PER_LEVEL = 4;
-export const PASS = 3;
+   3 题里对 2 题才算掌握。四选一瞎蒙能蒙到 2 题的概率是 16%，
+   够低了；再往上加题只是把测评拖长 —— 五六岁的孩子坐不住，
+   前面拖太久，后面书写那一项的数据反而不准。
+   每板块最多 4 轮 => 最多 12 题（原来是 24 题）。模拟下来：真实水平在
+   L0–L1 的孩子 5～7 题就测完，L3 左右的要 12 题，定级误差都在 ±1 级内。 */
+export const PER_LEVEL = 3;
+export const PASS = 2;
 export const MAX_LEVEL = 10;     // 课程库实际只有 L1–L10（1000 字）
-export const MAX_ROUNDS = 6;     // 每个板块最多考 6 轮，控制在孩子坐得住的时间内
+export const MAX_ROUNDS = 4;     // 每个板块最多考 4 轮，控制在孩子坐得住的时间内
 
 /* ---------------- 出题 ---------------- */
 
@@ -60,7 +63,11 @@ export function makeRecognizeItems(curriculum, level, count = PER_LEVEL) {
 }
 
 /* 阅读：句子挖掉一个字，从四个字里选回来。
-   挖的字必须是这一级的字 —— 挖到更高级的字，考的就不是这一级了。 */
+   挖的字必须是这一级的字 —— 挖到更高级的字，考的就不是这一级了。
+
+   一个句子只出一道题。一句话里往往有好几个本级字，全都收进来的话，
+   抽出来的几道题会是同一个句子挖不同的空 —— 孩子看着像在做重复的题，
+   而且第二次已经读过这句了，考的就不是阅读了。 */
 export function makeReadingItems(curriculum, level, count = PER_LEVEL) {
   const levelChars = new Set(charsOfLevel(curriculum, level).map((c) => c.hanzi));
   const byHanzi = new Map((curriculum.characters || []).map((c) => [c.hanzi, c]));
@@ -69,10 +76,11 @@ export function makeReadingItems(curriculum, level, count = PER_LEVEL) {
   shuffled(lessonsOfLevel(curriculum, level)).forEach((l) => {
     const s = (l.sentence || "").trim();
     if (s.length < 3) return;
+    const spots = [];
     s.split("").forEach((ch, i) => {
-      if (!levelChars.has(ch)) return;
-      cand.push({ sentence: s, blank: i, answer: ch });
+      if (levelChars.has(ch)) spots.push({ sentence: s, blank: i, answer: ch });
     });
+    if (spots.length) cand.push(shuffled(spots)[0]);   // 每句只留一个空
   });
 
   return shuffled(cand).slice(0, count).map((c) => {

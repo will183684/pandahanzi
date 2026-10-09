@@ -1,7 +1,9 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { C } from "../theme";
 import { BigButton } from "../components/ui";
-import { playChar, stopAudio } from "../audio";
+import { shuffled } from "../utils";
+import { playChar, playSequence, stopAudio } from "../audio";
+import { wordsFor } from "../wordExamples";
 
 /* ===================================================================
    ACTIVITY 1 — 认一认 (Flashcards)
@@ -12,19 +14,53 @@ import { playChar, stopAudio } from "../audio";
    「读过」以翻开卡片为准：原来只要点「下一个」翻页就算数，
    不翻卡片也能通关；现在必须每张都翻开才出现完成按钮。
    =================================================================== */
-export default function FlashcardActivity({ meta, onDone }) {
-  const [idx, setIdx] = useState(0);
-  const [flipped, setFlipped] = useState(false);
-  const [read, setRead] = useState(() => new Set());   // 翻开过的卡片下标
+export default function FlashcardActivity({ meta, onDone, shuffle = false }) {
   const chars = meta.chars;
+
+  /* deck 是这一遍的牌序（存的是字表下标），pos 是翻到第几张。
+     不直接拿下标当顺序，是为了能打乱而不影响拼音/表情的对应关系 ——
+     那几张表都是按字表下标索引的。 */
+  const newDeck = useCallback(
+    (mix) => {
+      const seq = chars.map((_, i) => i);
+      return mix ? shuffled(seq) : seq;
+    },
+    [chars]
+  );
+  const [deck, setDeck] = useState(() => newDeck(shuffle));
+  const [pos, setPos] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [read, setRead] = useState(() => new Set());   // 翻开过的字表下标
+  const idx = deck[pos] ?? 0;                          // 当前这张是字表里的第几个字
   const allRead = read.size >= chars.length;
   const thisRead = read.has(idx);
+  const examples = wordsFor(chars[idx], meta.vocab);
+
+  /* 点词语也能听。和「拼词语」用同一套：老师录过整词就放整词，
+     没录就把单字录音一个个接起来，都没有才退回机器音。 */
+  const sayWord = useCallback((w) => {
+    const url = (meta.wordAudioMap || {})[w];
+    return url ? playSequence([w], { [w]: url }) : playSequence(w.split(""), meta.audioMap);
+  }, [meta.wordAudioMap, meta.audioMap]);
+
+  /* 换课文了就重新发牌 */
+  useEffect(() => { setDeck(newDeck(shuffle)); setPos(0); setRead(new Set()); }, [newDeck, shuffle]);
 
   const go = useCallback((dir) => {
     setFlipped(false);
     stopAudio();
-    setIdx((prev) => (prev + dir + chars.length) % chars.length);
+    setPos((prev) => (prev + dir + chars.length) % chars.length);
   }, [chars.length]);
+
+  /* 手动再来一遍：重新洗牌、从头开始，翻过的记录清空。
+     星星已经记在库里了，这里清的只是这一遍的进度。 */
+  const reshuffle = useCallback(() => {
+    stopAudio();
+    setDeck(newDeck(true));
+    setPos(0);
+    setFlipped(false);
+    setRead(new Set());
+  }, [newDeck]);
 
   /* 翻到背面时读一遍这个字：有老师录音放录音，否则 TTS。
      必须由点击直接触发，否则会被浏览器的自动播放策略拦掉。 */
@@ -38,6 +74,18 @@ export default function FlashcardActivity({ meta, onDone }) {
   }, [flipped, chars, idx, meta.audioMap]);
 
   useEffect(() => stopAudio, []);
+
+  /* 十张卡都翻过就算做完，自动记一笔。
+     别的活动都是最后一题做完自动结束，只有这里还要再点一下金色按钮 ——
+     孩子翻完直接点「返回」，练是练了，星星一颗没有。
+     下面那个按钮留着：用作再确认，也给自动没触发时一条退路。 */
+  const doneRef = useRef(false);
+  useEffect(() => { doneRef.current = false; }, [deck]);
+  useEffect(() => {
+    if (!allRead || doneRef.current) return;
+    doneRef.current = true;
+    onDone();
+  }, [allRead, onDone]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
@@ -83,12 +131,24 @@ export default function FlashcardActivity({ meta, onDone }) {
             <span style={{ fontSize: 76, fontWeight: 800, lineHeight: 1 }}>{chars[idx]}</span>
             <span style={{ fontSize: 30, color: C.bamboo, fontWeight: 700 }}>{meta.pinyins[idx] || ""}</span>
             <span style={{ fontSize: 36 }}>{meta.emojiMap[chars[idx]] || "✨"}</span>
-            <div style={{
-              marginTop: 6, background: "#FFF1F0", border: `2px solid ${C.red}44`,
-              borderRadius: 999, padding: "5px 14px", fontSize: 15, fontWeight: 800, color: C.red,
-            }}>
-              🗣️ 大声跟读一遍
-            </div>
+            {/* 组词举例：认一个孤零零的字，孩子不知道它用在哪儿。
+                本课正在教的词排前面，不够再用常用词补；一个都没有就不占地方。 */}
+            {examples.length > 0 && (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", marginTop: 2 }}>
+                {examples.map((w) => (
+                  <button
+                    key={w}
+                    onClick={(ev) => { ev.stopPropagation(); sayWord(w); }}
+                    title="听这个词"
+                    style={{
+                      background: "#EAF6EC", border: `1px solid ${C.bamboo}44`, borderRadius: 999,
+                      padding: "4px 14px", fontSize: 20, fontWeight: 700, color: "#4A7A50",
+                      cursor: "pointer", minHeight: 36,
+                    }}
+                  >{w} 🔊</button>
+                ))}
+              </div>
+            )}
             <button
               onClick={(ev) => { ev.stopPropagation(); playChar(chars[idx], meta.audioMap); }}
               aria-label="再听一次"
@@ -104,30 +164,33 @@ export default function FlashcardActivity({ meta, onDone }) {
 
       <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
         <BigButton color={C.bamboo} light onClick={() => go(-1)}>← 上一个</BigButton>
-        <span style={{ fontWeight: 800, color: "#8A8276" }}>{idx + 1} / {chars.length}</span>
+        <span style={{ fontWeight: 800, color: "#8A8276" }}>{pos + 1} / {chars.length}</span>
         <BigButton color={C.bamboo} light onClick={() => go(1)}>下一个 →</BigButton>
       </div>
 
       {/* 进度：必须每张都翻开跟读过 */}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
-        {chars.map((ch, i) => (
+        {deck.map((ci, i) => (
           <span key={i} style={{
             width: 30, height: 34, borderRadius: 8, display: "flex", alignItems: "center",
             justifyContent: "center", fontSize: 17, fontWeight: 800,
-            background: read.has(i) ? "#EAF6EC" : "#F4EEE3",
-            border: `2px solid ${i === idx ? C.gold : read.has(i) ? C.bamboo : C.border}`,
-            color: read.has(i) ? C.ink : "#C4BCAD",
-          }}>{ch}</span>
+            background: read.has(ci) ? "#EAF6EC" : "#F4EEE3",
+            border: `2px solid ${i === pos ? C.gold : read.has(ci) ? C.bamboo : C.border}`,
+            color: read.has(ci) ? C.ink : "#C4BCAD",
+          }}>{chars[ci]}</span>
         ))}
       </div>
 
-      {allRead ? (
-        <BigButton color={C.gold} onClick={onDone}>全部跟读完了！⭐</BigButton>
-      ) : (
-        <p style={{ fontSize: 14, color: "#9C9382", margin: 0 }}>
-          还有 {chars.length - read.size} 个字没跟读
-        </p>
-      )}
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
+        {allRead ? (
+          <BigButton color={C.gold} onClick={onDone}>全部跟读完了！⭐</BigButton>
+        ) : (
+          <p style={{ fontSize: 14, color: "#9C9382", margin: 0 }}>
+            还有 {chars.length - read.size} 个字没跟读
+          </p>
+        )}
+        <BigButton color={C.bamboo} light onClick={reshuffle}>🔀 打乱重来</BigButton>
+      </div>
     </div>
   );
 }

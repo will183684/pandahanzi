@@ -8,7 +8,7 @@ import { C, LEVELS } from "../theme";
      · LessonPicker    弹窗，给当前所在的班选课
      · CurriculumBrowser  独立页签，浏览全部字表并布置给任意班级
    =================================================================== */
-export default function LessonList({ curriculum, taken, busy, onPick, pickLabel, onUnpick }) {
+export default function LessonList({ curriculum, taken, busy, onPick, pickLabel, onUnpick, onEdit }) {
   const [openLevel, setOpenLevel] = useState(1);
   const [query, setQuery] = useState("");
 
@@ -103,6 +103,18 @@ export default function LessonList({ curriculum, taken, busy, onPick, pickLabel,
                             fontWeight: 700, fontSize: 13, cursor: busy ? "not-allowed" : "pointer",
                           }}
                         >取消布置</button>
+                      )}
+                      {/* 备课不该等布置：老师想提前给某一课补录音、改词句，
+                          直接在库里点这个进去改，不用先把课排给哪个班。 */}
+                      {onEdit && (
+                        <button
+                          onClick={() => onEdit(l)}
+                          style={{
+                            minHeight: 40, padding: "0 10px", borderRadius: 10,
+                            border: `2px solid ${C.border}`, background: "#fff", color: "#8A8276",
+                            fontWeight: 700, fontSize: 13, cursor: "pointer",
+                          }}
+                        >✏️ 编辑</button>
                       )}
                       {!isActive && (
                         <button
