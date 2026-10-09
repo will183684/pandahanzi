@@ -78,17 +78,42 @@ export default function FlashcardActivity({ meta, onDone, shuffle = false }) {
   /* 十张卡都翻过就算做完，自动记一笔。
      别的活动都是最后一题做完自动结束，只有这里还要再点一下金色按钮 ——
      孩子翻完直接点「返回」，练是练了，星星一颗没有。
-     下面那个按钮留着：用作再确认，也给自动没触发时一条退路。 */
+     下面那个按钮留着：用作再确认，也给自动没触发时一条退路。
+
+     但不能翻开最后一张就立刻庆祝 —— 那一屏是全屏盖上来的，孩子还没
+     看清这张卡的拼音和组词就被挡住了，更别说点组词听一遍。
+     所以等他安静几秒再庆祝，中间只要还在点（听组词、听读音、翻卡片）
+     就重新计时。 */
   const doneRef = useRef(false);
+  const idleRef = useRef(null);
   useEffect(() => { doneRef.current = false; }, [deck]);
-  useEffect(() => {
+
+  const armFinish = useCallback(() => {
     if (!allRead || doneRef.current) return;
-    doneRef.current = true;
-    onDone();
+    if (idleRef.current) clearTimeout(idleRef.current);
+    idleRef.current = setTimeout(() => {
+      if (doneRef.current) return;
+      doneRef.current = true;
+      onDone();
+    }, 4500);
   }, [allRead, onDone]);
 
+  useEffect(() => { armFinish(); }, [armFinish]);
+  useEffect(() => () => { if (idleRef.current) clearTimeout(idleRef.current); }, []);
+
+  /* 点了金色按钮就是「我看完了」，不用再等 */
+  const finishNow = useCallback(() => {
+    if (idleRef.current) clearTimeout(idleRef.current);
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onDone();
+  }, [onDone]);
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
+    <div
+      onClickCapture={armFinish}
+      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
+    >
       <div style={{ textAlign: "center" }}>
         <p style={{ fontSize: 16, color: "#6B6356", margin: "0 0 6px" }}>
           轻触卡片翻面，听清楚读音
@@ -183,7 +208,7 @@ export default function FlashcardActivity({ meta, onDone, shuffle = false }) {
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", justifyContent: "center" }}>
         {allRead ? (
-          <BigButton color={C.gold} onClick={onDone}>全部跟读完了！⭐</BigButton>
+          <BigButton color={C.gold} onClick={finishNow}>全部跟读完了！⭐</BigButton>
         ) : (
           <p style={{ fontSize: 14, color: "#9C9382", margin: 0 }}>
             还有 {chars.length - read.size} 个字没跟读

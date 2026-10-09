@@ -64,6 +64,41 @@ if (typeof window !== "undefined" && window.speechSynthesis) {
   }, 300);
 }
 
+/* ---------------- iOS 的语音解锁 ----------------
+
+   iOS 只允许「用户手势里直接发起」的语音合成。拼词时第一个字放的是
+   录音，等它放完再轮到第二个字，手势上下文早没了 —— iOS 会静默丢掉
+   那一句，不报错、什么都不响。「飞走」的「走」就是这么哑的。
+
+   办法是在页面上第一次触摸时先念一句空的（音量 0）把引擎点着。
+   点着之后这个页面里后续的合成就都放得出了。 */
+let speechUnlocked = false;
+function unlockSpeech() {
+  if (speechUnlocked) return;
+  const synth = typeof window !== "undefined" ? window.speechSynthesis : null;
+  if (!synth || typeof window.SpeechSynthesisUtterance === "undefined") return;
+  speechUnlocked = true;
+  try {
+    const u = new window.SpeechSynthesisUtterance(" ");
+    u.volume = 0;
+    u.rate = 1;
+    synth.speak(u);
+  } catch (e) { /* 点不着就算了，有录音的字照样能放 */ }
+}
+
+if (typeof window !== "undefined" && window.addEventListener) {
+  /* 捕获阶段挂一次就够，之后自己摘掉 */
+  const once = () => {
+    unlockSpeech();
+    ["pointerdown", "touchstart", "mousedown", "keydown"].forEach(
+      (e) => window.removeEventListener(e, once, true)
+    );
+  };
+  ["pointerdown", "touchstart", "mousedown", "keydown"].forEach(
+    (e) => window.addEventListener(e, once, true)
+  );
+}
+
 /* 调试用：看当前选中的是哪个音色 */
 export function currentVoiceName() {
   const v = pickVoice();
