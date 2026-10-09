@@ -127,15 +127,19 @@ export const WORD_EXAMPLES = {
   醒: ["醒来", "睡醒"],
 };
 
-/* 这个字的组词：老师在课程库里填的词排前面（那是本课正在教的），
-   不够两个再用上面这张表补。最多给两个 —— 卡片背面放不下更多，
-   五六岁的孩子一次也记不住更多。 */
+/* 卡片上给几个词。一个就够 —— 五六岁的孩子一次记一个，
+   两个并排反而都记不住，卡片也挤。
+   表里每个字仍然存两个：换成 2 只要改这一个数，数据不用重写。 */
+const SHOW = 1;
+
+/* 这个字的组词：老师在课程库里填的词排前面（那是本课正在教的，
+   孩子当周就会见到），没有再用上面这张表补。 */
 export function wordsFor(hanzi, lessonVocab) {
   if (!hanzi) return [];
   const out = [];
   const push = (w) => {
     if (!w || out.includes(w) || !w.includes(hanzi)) return;
-    if (out.length < 2) out.push(w);
+    if (out.length < SHOW) out.push(w);
   };
   (lessonVocab || []).forEach(push);
   (WORD_EXAMPLES[hanzi] || []).forEach(push);
