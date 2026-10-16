@@ -63,7 +63,8 @@
       "Bash(sips -Z 320 /tmp/padded.png --out /tmp/padded.png)",
       "Bash(cp /tmp/padded.png public/mascot.png && ls -lh public/mascot.png)",
       "Bash(gcloud builds *)",
-      "Bash(gcloud run *)"
+      "Bash(gcloud run *)",
+      "Bash(python3 -)"
     ]
   }
 }

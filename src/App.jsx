@@ -9,6 +9,7 @@ import {
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
 import { preloadAudio } from "./audio";
+import { wordsFor } from "./wordExamples";
 import Panda from "./components/Panda";
 import { Toast, Shell, BigButton } from "./components/ui";
 import ActivityHost from "./activities/ActivityHost";
@@ -184,6 +185,25 @@ export default function PandaHanziApp() {
      「小羊」的「小」可能属于别的课，字表里没有它 —— 不单独取一次的话，
      老师明明录过，孩子在拼词语里听到的还是机器音。
      只认词句的文本内容，不认 lesson 对象身份，免得每次重取都重查。 */
+  /* 「认一认」翻到背面给每个字一个组词，孩子点一下就念。那些词多半不在
+     词语栏里（「力」配「用力」，而本课词语是别的），所以下面取录音时
+     必须把它们算进去 —— 只按词语栏取的话，老师明明录了「用力」，
+     孩子听到的还是机器音拼出来的。老师端 ContentSettings 用的是同一个
+     wordsFor，两边列出来的词一致。 */
+  const lessonHanzi = viewChars.map((c) => c.hanzi).join("");
+  const exampleWords = useMemo(() => {
+    const vocab = (viewLesson && viewLesson.vocab) || [];
+    const out = [];
+    lessonHanzi.split("").forEach((h) => {
+      wordsFor(h, vocab).forEach((w) => {
+        if (!vocab.includes(w) && !out.includes(w)) out.push(w);
+      });
+    });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lessonHanzi, viewLesson]);
+  const exampleKey = exampleWords.join(" ");
+
   const vocabKey = viewLesson
     ? (viewLesson.vocab || []).join("") + "|" + (viewLesson.sentence || "")
     : "";
@@ -191,7 +211,7 @@ export default function PandaHanziApp() {
   /* 整词录音：L4 起是纯听力，必须用老师念的整词，不能拿单字接 */
   const [wordAudio, setWordAudio] = useState({});
   useEffect(() => {
-    const words = (viewLesson && viewLesson.vocab) || [];
+    const words = [...((viewLesson && viewLesson.vocab) || []), ...exampleWords];
     if (!words.length) { setWordAudio({}); return undefined; }
     let alive = true;
     getWordAudios(words).then((m) => {
@@ -202,10 +222,12 @@ export default function PandaHanziApp() {
     }).catch(() => {});
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vocabKey, charsTick]);
+  }, [vocabKey, exampleKey, charsTick]);
 
   useEffect(() => {
-    const want = Array.from(new Set(vocabKey.split("").filter((c) => /[\u4e00-\u9fa5]/.test(c))));
+    const want = Array.from(new Set(
+      (vocabKey + exampleKey).split("").filter((c) => /[\u4e00-\u9fa5]/.test(c))
+    ));
     if (!want.length) { setExtraAudio({}); return undefined; }
     let alive = true;
     getSharedAudioByHanzi(want)
