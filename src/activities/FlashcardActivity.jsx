@@ -4,6 +4,7 @@ import { BigButton } from "../components/ui";
 import { shuffled } from "../utils";
 import { playChar, playSequence, stopAudio } from "../audio";
 import { wordsFor } from "../wordExamples";
+import { getWordAudios, getSharedAudioByHanzi } from "../supabaseClient";
 
 /* ===================================================================
    ACTIVITY 1 — 认一认 (Flashcards)
@@ -36,11 +37,46 @@ export default function FlashcardActivity({ meta, onDone, shuffle = false }) {
   const thisRead = read.has(idx);
   const examples = wordsFor(chars[idx], meta.vocab);
 
-  /* 点词语也能听。和「拼词语」用同一套：老师录过整词就放整词，
-     没录就把单字录音一个个接起来，都没有才退回机器音。 */
-  const sayWord = useCallback((w) => {
-    const url = (meta.wordAudioMap || {})[w];
-    return url ? playSequence([w], { [w]: url }) : playSequence(w.split(""), meta.audioMap);
+  /* 点词语也能听。老师录过整词就放整词，没录就把单字录音一个个接起来，
+     都没有才退回机器音。
+
+     地址表里查不到时要现去库里取一次，不能直接判定「没录音」——
+     预加载那边是按「词语栏 + 组词」两批先后取的，两个请求并发，
+     先发的那个要是后回来就会把后发的结果盖掉，手机上网络一抖就复现：
+     老师明明录了「嘴巴」，孩子听到的却是机器音拼的。
+     现取一次最多多一个来回，但结果不会被竞态偷走。 */
+  const fetchedRef = useRef({ words: {}, chars: {} });
+
+  const sayWord = useCallback(async (w) => {
+    const cache = fetchedRef.current;
+    let url = (meta.wordAudioMap || {})[w] || cache.words[w];
+    if (url === undefined) {
+      try {
+        const m = await getWordAudios([w]);
+        const v = m.get(w);
+        url = (v && v.audio_url) || null;
+      } catch (e) { url = null; }
+      cache.words[w] = url;
+    }
+    if (url) return playSequence([w], { [w]: url });
+
+    /* 没有整词录音：逐字接。本课字表外的字（「嘴巴」的「嘴」）可能
+       不在 audioMap 里，同样现取一次。 */
+    const map = { ...(meta.audioMap || {}) };
+    Object.assign(map, cache.chars);
+    const missing = w.split("").filter((c) => !map[c] && !(c in cache.chars));
+    if (missing.length) {
+      try {
+        const m = await getSharedAudioByHanzi(missing);
+        missing.forEach((c) => {
+          const v = m.get(c);
+          const u = (v && v.audio_url) || null;
+          cache.chars[c] = u;
+          if (u) map[c] = u;
+        });
+      } catch (e) { /* 取不到就用机器音 */ }
+    }
+    return playSequence(w.split(""), map);
   }, [meta.wordAudioMap, meta.audioMap]);
 
   /* 换课文了就重新发牌 */

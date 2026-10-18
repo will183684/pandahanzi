@@ -211,6 +211,10 @@ export default function PandaHanziApp() {
   /* 整词录音：L4 起是纯听力，必须用老师念的整词，不能拿单字接 */
   const [wordAudio, setWordAudio] = useState({});
   useEffect(() => {
+    /* 等字表到了再取。字表没到时组词推不出来，这一发请求只带词语栏那几个，
+       和随后那发完整的并发跑 —— 先发的后回来就把完整结果盖掉了，
+       「嘴巴」于是查不到录音、退回机器音。 */
+    if (viewLessonId && charsFor !== viewLessonId) return undefined;
     const words = [...((viewLesson && viewLesson.vocab) || []), ...exampleWords];
     if (!words.length) { setWordAudio({}); return undefined; }
     let alive = true;
@@ -222,9 +226,10 @@ export default function PandaHanziApp() {
     }).catch(() => {});
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vocabKey, exampleKey, charsTick]);
+  }, [vocabKey, exampleKey, charsFor, viewLessonId, charsTick]);
 
   useEffect(() => {
+    if (viewLessonId && charsFor !== viewLessonId) return undefined;   // 同上
     const want = Array.from(new Set(
       (vocabKey + exampleKey).split("").filter((c) => /[\u4e00-\u9fa5]/.test(c))
     ));
@@ -239,7 +244,7 @@ export default function PandaHanziApp() {
       })
       .catch(() => { /* 查不到就都用机器音 */ });
     return () => { alive = false; };
-  }, [vocabKey, charsTick]);
+  }, [vocabKey, exampleKey, charsFor, viewLessonId, charsTick]);
 
   const viewMeta = useMemo(
     () => toMeta(viewLesson, viewChars, curriculum, extraAudio, wordAudio),
