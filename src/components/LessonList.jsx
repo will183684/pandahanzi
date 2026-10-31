@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { C, LEVELS } from "../theme";
 
 /* ===================================================================
@@ -8,9 +8,26 @@ import { C, LEVELS } from "../theme";
      · LessonPicker    弹窗，给当前所在的班选课
      · CurriculumBrowser  独立页签，浏览全部字表并布置给任意班级
    =================================================================== */
-export default function LessonList({ curriculum, taken, busy, onPick, pickLabel, onUnpick, onEdit }) {
-  const [openLevel, setOpenLevel] = useState(1);
-  const [query, setQuery] = useState("");
+export default function LessonList({
+  curriculum, taken, busy, onPick, pickLabel, onUnpick, onEdit,
+  /* 展开的级别和搜索词可以由外面接管。课程库要这么用 —— 老师点进某一课
+     录完音返回时，这个组件是重新挂载的，状态留在自己手里就会缩回 L1，
+     老师得重新展开、重新找那一课。焦点课号用来滚回去。 */
+  openLevel: openLevelProp, onOpenLevel, query: queryProp, onQuery, focusId,
+}) {
+  const [openLevelSelf, setOpenLevelSelf] = useState(1);
+  const [querySelf, setQuerySelf] = useState("");
+  const openLevel = openLevelProp === undefined ? openLevelSelf : openLevelProp;
+  const setOpenLevel = onOpenLevel || setOpenLevelSelf;
+  const query = queryProp === undefined ? querySelf : queryProp;
+  const setQuery = onQuery || setQuerySelf;
+
+  /* 返回时滚回刚才那一课，不然展开了也还得自己找 */
+  const focusRef = useRef(null);
+  useEffect(() => {
+    if (!focusId || !focusRef.current) return;
+    try { focusRef.current.scrollIntoView({ block: "center" }); } catch (e) { /* ignore */ }
+  }, [focusId]);
 
   const q = query.trim();
   const matches = (l) =>
@@ -70,11 +87,13 @@ export default function LessonList({ curriculum, taken, busy, onPick, pickLabel,
                   const st = taken.get(l.id);
                   const isActive = st && st.active;
                   const isDone = st && st.done > 0;
+                  const isFocus = focusId === l.id;
                   return (
-                    <div key={l.id} style={{
+                    <div key={l.id} ref={isFocus ? focusRef : null} style={{
                       display: "flex", alignItems: "center", gap: 10, padding: "10px 12px",
-                      borderRadius: 12, background: isActive ? "#EAF6EC" : "#fff",
-                      border: `2px solid ${isActive ? C.bamboo : isDone ? C.gold + "66" : C.border}`,
+                      borderRadius: 12,
+                      background: isFocus ? "#FFFBF2" : isActive ? "#EAF6EC" : "#fff",
+                      border: `2px solid ${isFocus ? C.gold : isActive ? C.bamboo : isDone ? C.gold + "66" : C.border}`,
                       flexWrap: "wrap",
                     }}>
                       <span style={{ fontSize: 13, fontWeight: 700, minWidth: 74, whiteSpace: "nowrap" }}>

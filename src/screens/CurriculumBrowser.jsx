@@ -109,12 +109,21 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
      这里给库里的课一个不会和班级排课撞车的 id。 */
   const libIdOf = (l) => `lib:${l.id}`;
 
+  /* 列表的展开级别、搜索词、刚编辑过的那一课都记在这里，不放在 LessonList
+     内部 —— 进编辑页时那个组件会卸载，状态跟着没了，返回就缩回 L1，
+     老师每录完一课都要重新展开、重新翻到那一课。 */
+  const [listLevel, setListLevel] = useState(1);
+  const [listQuery, setListQuery] = useState("");
+  const [lastEdited, setLastEdited] = useState(null);
+
   const [editing, setEditing] = useState(null);     // 课程库里的那一课
   const [editChars, setEditChars] = useState([]);
   const [editCharsFor, setEditCharsFor] = useState(null);
 
   const openEditor = useCallback(async (l) => {
     setEditing(l);
+    setListLevel(l.level);        // 返回时就停在这一级
+    setLastEdited(l.id);
     setEditCharsFor(null);
     const hanzis = (l.chars || []).map((c) => c.hanzi);
     let audio = new Map();
@@ -228,6 +237,9 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
       <LessonList
         curriculum={curriculum} taken={taken} busy={busy}
         onPick={assign} pickLabel="布置" onUnpick={unassign} onEdit={openEditor}
+        openLevel={listLevel} onOpenLevel={setListLevel}
+        query={listQuery} onQuery={setListQuery}
+        focusId={lastEdited}
       />
 
       {pending && (
