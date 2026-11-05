@@ -106,7 +106,12 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
                 {progress[i] ? "✅ 已完成 · 点一下再做一遍" : a.desc}
               </span>
             </span>
-            <span style={{ fontSize: 26 }}>{progress[i] ? "⭐" : ""}</span>
+            {/* 每一项都给一颗星：做完是金的，没做是空的。
+                原来没做完就什么都不显示，家长看不出「这一项还没做」和
+                「这一项根本没有星星」的区别，只觉得星星丢了。 */}
+            <span style={{ fontSize: 26, color: progress[i] ? undefined : "#C4BCAD" }}>
+              {progress[i] ? "⭐" : "☆"}
+            </span>
           </button>
         ))}
       </div>

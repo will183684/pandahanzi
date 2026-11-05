@@ -629,7 +629,10 @@ export default function PandaHanziApp() {
       {activeActivity == null ? (
         reviewing ? (
           /* 回顾模式也用孩子自己的头像；老师端那个 ReviewHome 不传，保持品牌熊猫 */
-          <ReviewHome meta={viewMeta} avatar={myAvatar} onOpenActivity={setActiveActivity} onExit={exitReview} />
+          <ReviewHome
+            meta={viewMeta} progress={viewProgress} avatar={myAvatar}
+            onOpenActivity={setActiveActivity} onExit={exitReview}
+          />
         ) : (
           <StudentHome
             studentName={session.name} meta={viewMeta} progress={viewProgress} readOnly={false}
