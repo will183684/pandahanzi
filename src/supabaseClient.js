@@ -62,6 +62,39 @@ export async function saveProfile(classId, name, profile) {
   await kvSet(classId, "profile:" + name, profile);
 }
 
+/* ---- 单元小测的题库（老师自己加的） ----
+   和课程库一样是全站共用的（存在 __root__ 名下），不分班 —— 老师给第 3 课
+   写的短文，别的班上到第 3 课照样用得上。
+   key = "quizbank:{课号}"，value 形如
+     { sentences: ["小鸟在天上"], passages: [{ text:[...], questions:[{q,a,opts}] }] }
+   内置的那份题库在 quizPassages.js 里，两边合起来出题。 */
+const emptyBank = () => ({ sentences: [], passages: [] });
+
+export async function getQuizBank() {
+  const { data, error } = await supabase
+    .from(TABLE).select("key,value").eq("class_id", ROOT).like("key", "quizbank:%");
+  if (error) throw error;
+  const out = {};
+  (data || []).forEach((r) => {
+    const no = Number(r.key.slice("quizbank:".length));
+    if (!Number.isFinite(no) || !r.value) return;
+    out[no] = { ...emptyBank(), ...r.value };
+  });
+  return out;
+}
+
+export async function getQuizBankFor(lessonNo) {
+  const v = await kvGet(ROOT, "quizbank:" + lessonNo);
+  return { ...emptyBank(), ...(v && typeof v === "object" ? v : {}) };
+}
+
+export async function saveQuizBank(lessonNo, bank) {
+  await kvSet(ROOT, "quizbank:" + lessonNo, {
+    sentences: bank.sentences || [],
+    passages: bank.passages || [],
+  });
+}
+
 /* ---- 单元小测的成绩 ----
    和头像一样存在 kv 里（key = "quiz:{名字}"），value 形如
    { "1": {at, correct, total, perLesson:[...]}, "2": {...} }，键是第几张卷子。

@@ -5,6 +5,7 @@ import { supabase, getSharedAudioByHanzi, getWordAudios } from "../supabaseClien
 import { pickRecorderMime, toPlayableBlob, extFor } from "../recordingFormat";
 import { playSequence, stopAudio } from "../audio";
 import { wordsFor } from "../wordExamples";
+import QuizBankEditor from "./QuizBankEditor";
 
 /* ===================================================================
    本课内容设置 —— 编辑本班当前这节课：
@@ -18,7 +19,8 @@ import { wordsFor } from "../wordExamples";
 const playable = (u) => !!u && /^https?:/.test(String(u));
 
 export default function ContentSettings({
-  lesson, lessonNo, chars, charsFor, onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onBack, pushToast, busy,
+  lesson, lessonNo, chars, charsFor, curriculum,
+  onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onBack, pushToast, busy,
   /* editMode：从「课程编辑」进来的，只改内容 —— 藏掉「换一课 / 完成本课」
      这些会动排课状态的按钮。
 
@@ -562,6 +564,12 @@ export default function ContentSettings({
           <input style={{ ...inputStyle, width: "100%" }} value={sentence} placeholder="例如：山上有大树"
             onChange={(ev) => { setSentence(ev.target.value); setDirty(true); }} />
         </div>
+
+        {/* 单元小测的题库。它存在别的地方（按课号全站共用），自己保存，
+            所以不跟着上面那个「保存」走，也不算进 dirty。 */}
+        <QuizBankEditor
+          lessonNo={lessonNo} lessonChars={rows} curriculum={curriculum} pushToast={pushToast}
+        />
 
         {/* 整词录音。L4 起「拼词语」孩子看不到字，只能靠听，
             这时必须是老师念的整词 —— 单字接起来没有连读和变调。 */}

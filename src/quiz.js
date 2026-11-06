@@ -86,10 +86,16 @@ function recognizeItem(lesson, pool) {
 }
 
 /* 句子挖一个字。挖的必须是本课的字 —— 挖到别的课的字，
-   这道题就不是在考这一课了，报告会指错地方。 */
-function clozeItem(lesson, pool) {
-  const s = (lesson.sentence || "").trim();
-  if (s.length < 3) return null;
+   这道题就不是在考这一课了，报告会指错地方。
+
+   课程库里每课只有一句话，光靠它重做一遍还是那句。老师在「小测题库」
+   里多写几句，这里就多几句可抽（extra）。 */
+function clozeItem(lesson, pool, extra) {
+  const all = [lesson.sentence, ...(extra || [])]
+    .map((x) => String(x || "").trim())
+    .filter((x) => x.length >= 3);
+  const s = shuffled(all)[0] || "";
+  if (!s) return null;
   const own = new Set((lesson.chars || []).map((c) => c.hanzi));
   const spots = [];
   s.split("").forEach((ch, i) => { if (own.has(ch)) spots.push({ i, ch }); });
@@ -112,8 +118,14 @@ function clozeItem(lesson, pool) {
 /* 短文理解：手写题库里抽一道。
    尽量换着短文抽（used 记住这张卷子已经用过哪几篇）—— 同一篇短文连出三题，
    孩子第二眼就不用读了，考的就不是阅读是记性。实在没得换才重复用。 */
-function passageItem(block, lesson, used) {
+function passageItem(block, lesson, used, extraPassages) {
   const cand = passageQuestionsFor(block, lesson.lesson_no);
+  /* 老师自己写的短文挂在课号下面，和内置那份一起抽 */
+  (extraPassages || []).forEach((p) => {
+    (p.questions || []).forEach((q) => {
+      if (q && q.q && q.a && (q.opts || []).includes(q.a)) cand.push({ passage: p, question: q });
+    });
+  });
   if (!cand.length) return null;
   const fresh = cand.filter((c) => !used.has(c.passage));
   const pick = shuffled(fresh.length ? fresh : cand)[0];
@@ -154,20 +166,24 @@ function wordClozeItem(lesson, blockLessons) {
 
 /* 出一整张卷子。三种题型各自成段：孩子一段里做的是同一件事，
    不用每道题都重新适应玩法，最后一段才是最费劲的短文。 */
-export function makeQuiz(curriculum, block) {
+export function makeQuiz(curriculum, block, bank) {
   if (!curriculum) return [];
   const lessons = lessonsOfBlock(curriculum, block);
   if (!lessons.length) return [];
   const pool = taughtChars(curriculum, blockRange(block).to);
+  const bankOf = (no) => (bank && bank[no]) || {};
 
   const recog = [], cloze = [], read = [];
   const usedPassages = new Set();
   lessons.forEach((l) => {
+    const mine = bankOf(l.lesson_no);
     const a = recognizeItem(l, pool);
     if (a) recog.push(a);
-    const b = clozeItem(l, pool) || recognizeItem(l, pool);
+    const b = clozeItem(l, pool, mine.sentences) || recognizeItem(l, pool);
     if (b) cloze.push(b);
-    const c = passageItem(block, l, usedPassages) || wordClozeItem(l, lessons) || clozeItem(l, pool);
+    const c = passageItem(block, l, usedPassages, mine.passages)
+      || wordClozeItem(l, lessons)
+      || clozeItem(l, pool, mine.sentences);
     if (c) read.push(c);
   });
 

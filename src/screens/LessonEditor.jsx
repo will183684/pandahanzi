@@ -92,6 +92,7 @@ export default function LessonEditor({
       <ContentSettings
         editMode
         lesson={selected} lessonNo={lessonNoOf(selected)} chars={chars} charsFor={charsFor}
+        curriculum={curriculum}
         busy={busy} pushToast={pushToast}
         onSaveLesson={saveLesson} onSaveChars={saveChars}
         onBack={() => setSelectedId(null)}

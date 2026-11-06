@@ -3,7 +3,7 @@ import { C } from "../theme";
 import { Card, BigButton, Confetti } from "../components/ui";
 import Panda from "../components/Panda";
 import { playChar, speak, stopAudio } from "../audio";
-import { getSharedAudioByHanzi } from "../supabaseClient";
+import { getSharedAudioByHanzi, getQuizBank } from "../supabaseClient";
 import { makeQuiz, gradeQuiz, blockLabel, verdictFor, QUIZ_SIZE } from "../quiz";
 
 /* ===================================================================
@@ -42,8 +42,19 @@ export default function Quiz({
 
   useEffect(() => stopAudio, []);
 
+  /* 老师自己加的句子和短文。进这一屏就先取，等孩子看完说明点「开始」，
+     一般已经到了；没到就等它（出题要用），所以 start 里不直接用 state。 */
+  const bankRef = useRef(null);
+  useEffect(() => {
+    let alive = true;
+    getQuizBank()
+      .then((b) => { if (alive) bankRef.current = b; })
+      .catch(() => { if (alive) bankRef.current = {}; });   // 取不到就只用内置题库
+    return () => { alive = false; };
+  }, []);
+
   const start = useCallback(() => {
-    const list = makeQuiz(curriculum, block);
+    const list = makeQuiz(curriculum, block, bankRef.current || {});
     setItems(list);
     setAnswers([]); setIi(0); setPicked(null);
     setPhase("running");

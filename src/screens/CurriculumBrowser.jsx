@@ -181,6 +181,7 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
           sentence: editing.sentence || "",
         }}
         lessonNo={editing.lesson_no}
+        curriculum={curriculum}
         chars={editChars}
         charsFor={editCharsFor}
         busy={busy}
