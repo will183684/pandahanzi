@@ -62,6 +62,20 @@ export async function saveProfile(classId, name, profile) {
   await kvSet(classId, "profile:" + name, profile);
 }
 
+/* ---- 单元小测的成绩 ----
+   和头像一样存在 kv 里（key = "quiz:{名字}"），value 形如
+   { "1": {at, correct, total, perLesson:[...]}, "2": {...} }，键是第几张卷子。
+   只留最近一次：家长要看的是「现在哪一课没过」，不是历史曲线。 */
+export async function getQuizResults(classId, name) {
+  const v = await kvGet(classId, "quiz:" + name);
+  return v && typeof v === "object" ? v : {};
+}
+export async function saveQuizResult(classId, name, block, result) {
+  const all = await getQuizResults(classId, name);
+  all[String(block)] = { ...result, at: new Date().toISOString() };
+  await kvSet(classId, "quiz:" + name, all);
+}
+
 /* ---- teacher registry ---- */
 export async function getTeachers() {
   const v = await kvGet(ROOT, "teachers");

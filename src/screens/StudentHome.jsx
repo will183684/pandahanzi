@@ -3,11 +3,16 @@ import { C, ACTIVITIES, LEVEL_BY_NO } from "../theme";
 import Panda from "../components/Panda";
 import { Confetti, BigButton } from "../components/ui";
 import { speak, stopAudio } from "../audio";
+import { blockLabel as quizLabel } from "../quiz";
 
 /* ===================================================================
    Student Home
    =================================================================== */
-export default function StudentHome({ studentName, meta, progress, readOnly, avatar, onChangeAvatar, onOpenActivity, onOpenArchive, onOpenAssessment, onLogout }) {
+export default function StudentHome({
+  studentName, meta, progress, readOnly, avatar, onChangeAvatar,
+  onOpenActivity, onOpenArchive, onOpenAssessment, onLogout,
+  quizBlocks, quizResults, onOpenQuiz,
+}) {
   const doneCount = ACTIVITIES.filter((_, i) => progress[i]).length;
   const allDone = doneCount === ACTIVITIES.length;
   const [showFinale, setShowFinale] = useState(false);
@@ -115,6 +120,38 @@ export default function StudentHome({ studentName, meta, progress, readOnly, ava
           </button>
         ))}
       </div>
+
+      {/* 单元小测：每五课一张卷子，学完第 5、10、15… 课才出现。
+          放在六个活动下面 —— 它不是每天练的，是学完一段回头查一查。 */}
+      {onOpenQuiz && (quizBlocks || []).length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <p style={{ fontSize: 14, color: "#9C9382", margin: "0 0 8px", textAlign: "center" }}>
+            学完五课，来测一测读得懂不懂 📝
+          </p>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+            {quizBlocks.map((b) => {
+              const last = (quizResults || {})[String(b)];
+              return (
+                <button
+                  key={b}
+                  onClick={() => onOpenQuiz(b)}
+                  style={{
+                    minHeight: 56, padding: "8px 16px", borderRadius: 16, cursor: "pointer",
+                    border: `2px solid ${C.gold}`, background: "#FFFBF2", textAlign: "left",
+                  }}
+                >
+                  <span style={{ display: "block", fontWeight: 800, fontSize: 16 }}>
+                    📝 小测 · {quizLabel(b)}
+                  </span>
+                  <span style={{ display: "block", fontSize: 12, color: "#9C9382" }}>
+                    {last ? `上次 ${last.correct}/${last.total} 题` : "15 道题 · 还没做过"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* progress paws */}
       <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 22 }}>

@@ -5,9 +5,11 @@ import {
   startClassLesson, updateClassLesson, completeClassLesson, saveClassLessonChars,
   getClassProgress, markProgress, getProfiles, saveProfile, deleteClassLesson,
   saveSharedAudio, getCharSharedAudios, getSharedAudioByHanzi, getWordAudios, saveAssessmentResult,
+  getQuizResults, saveQuizResult,
 } from "./supabaseClient";
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
+import { unlockedBlocks } from "./quiz";
 import { preloadAudio } from "./audio";
 import { wordsFor } from "./wordExamples";
 import Panda from "./components/Panda";
@@ -16,6 +18,7 @@ import ActivityHost from "./activities/ActivityHost";
 import Landing from "./screens/Landing";
 import StudentHome from "./screens/StudentHome";
 import Assessment from "./screens/Assessment";
+import Quiz from "./screens/Quiz";
 import ReviewHome from "./screens/ReviewHome";
 import ArchivePanel from "./screens/ArchivePanel";
 import LessonPicker from "./screens/LessonPicker";
@@ -78,6 +81,8 @@ export default function PandaHanziApp() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [assessOpen, setAssessOpen] = useState(false);
+  const [quizBlock, setQuizBlock] = useState(null);   // 正在做第几张单元小测
+  const [quizResults, setQuizResults] = useState({}); // {第几张: 上次成绩}
   const [reviewId, setReviewId] = useState(null);     // 回顾中的 class_lesson id
 
   /* ---------------- 课程库：全局加载一次 ---------------- */
@@ -161,6 +166,28 @@ export default function PandaHanziApp() {
     if (active) return active;
     return classLessons.reduce((best, l) => (!best || l.seq > best.seq ? l : best), null);
   }, [classLessons]);
+  /* ---- 单元小测 ----
+     课程库的课号 -> 本班上这一课的那条排课。报告里「去复习」要靠它
+     才知道该打开哪一节；同一课上过两次就取最近的那次。 */
+  const classLessonByNo = useMemo(() => {
+    const m = new Map();
+    if (!curriculum) return m;
+    classLessons.forEach((cl) => {
+      const src = cl.lesson_id != null ? curriculum.lessonById.get(cl.lesson_id) : null;
+      if (!src) return;
+      const prev = m.get(src.lesson_no);
+      if (!prev || cl.seq > prev.seq) m.set(src.lesson_no, cl);
+    });
+    return m;
+  }, [classLessons, curriculum]);
+
+  /* 本班学到第几课了 —— 解锁哪几张卷子看它 */
+  const maxLessonNo = useMemo(() => {
+    let max = 0;
+    classLessonByNo.forEach((_, no) => { if (no > max) max = no; });
+    return max;
+  }, [classLessonByNo]);
+
   const reviewing = reviewId != null;
   const viewLesson = useMemo(
     () => (reviewing ? classLessons.find((l) => l.id === reviewId) || null : currentLesson),
@@ -429,6 +456,43 @@ export default function PandaHanziApp() {
       .catch(() => pushToast("测评结果没能保存，报告仍然有效 ⚠️"));
   }, [activeClassId, session, pushToast]);
 
+  /* 小测成绩：进班时取一次，做完一张存一张。
+     存不上不挡报告 —— 报告是当场算出来的，入库只是为了下次能看见上次考了多少。 */
+  const studentName = session && session.role === "parent" ? session.name : null;
+  useEffect(() => {
+    if (!activeClassId || !studentName) { setQuizResults({}); return undefined; }
+    let alive = true;
+    getQuizResults(activeClassId, studentName)
+      .then((r) => { if (alive) setQuizResults(r); })
+      .catch(() => { /* 取不到就当没考过 */ });
+    return () => { alive = false; };
+  }, [activeClassId, studentName]);
+
+  const finishQuiz = useCallback((block, report) => {
+    if (!activeClassId || !studentName) return;
+    const row = {
+      correct: report.correct, total: report.total,
+      perLesson: report.perLesson.map((l) => ({ lessonNo: l.lessonNo, correct: l.correct, total: l.total })),
+      weak: report.weak,
+    };
+    setQuizResults((prev) => ({ ...prev, [String(block)]: { ...row, at: new Date().toISOString() } }));
+    saveQuizResult(activeClassId, studentName, block, row)
+      .catch(() => pushToast("小测成绩没能保存，这份报告仍然有效 ⚠️"));
+  }, [activeClassId, studentName, pushToast]);
+
+  const lessonTitleOf = useCallback((lessonNo) => {
+    const cl = classLessonByNo.get(lessonNo);
+    if (cl && cl.title) return cl.title;
+    if (!curriculum) return `第${lessonNo}课`;
+    const src = (curriculum.lessons || []).find((l) => l.lesson_no === lessonNo);
+    return src ? (src.title || `第${lessonNo}课`) : `第${lessonNo}课`;
+  }, [classLessonByNo, curriculum]);
+
+  const reviewIdOf = useCallback((lessonNo) => {
+    const cl = classLessonByNo.get(lessonNo);
+    return cl ? cl.id : null;
+  }, [classLessonByNo]);
+
   /* ---------------- 进出班级 ---------------- */
   const enterClass = useCallback((cls, sess) => {
     setLoaded(false);
@@ -436,6 +500,7 @@ export default function PandaHanziApp() {
     setActiveClass(cls);
     setSession(sess);
     setReviewId(null); setActiveActivity(null); setArchiveOpen(false); setPickerOpen(false);
+    setQuizBlock(null); setQuizResults({});
   }, []);
 
   /* 清掉班级相关的一切，但可以选择保留登录身份 */
@@ -443,7 +508,7 @@ export default function PandaHanziApp() {
     setActiveClass(null); setLoaded(false);
     setClassLessons([]); setCharsBrief([]); setViewChars([]); setProgressRows([]); setProfiles({});
     setReviewId(null); setActiveActivity(null); setArchiveOpen(false);
-    setPickerOpen(false); setAvatarOpen(false);
+    setPickerOpen(false); setAvatarOpen(false); setQuizBlock(null); setQuizResults({});
   }, []);
 
   const logout = useCallback(() => {
@@ -624,6 +689,22 @@ export default function PandaHanziApp() {
     );
   }
 
+  if (quizBlock != null) {
+    return (
+      <Shell>
+        <Quiz
+          curriculum={curriculum} block={quizBlock} studentName={session.name}
+          lastResult={quizResults[String(quizBlock)]}
+          lessonTitleOf={lessonTitleOf} reviewIdOf={reviewIdOf}
+          onReview={(id) => { setQuizBlock(null); openReview(id); }}
+          onFinish={(report) => finishQuiz(quizBlock, report)}
+          onExit={() => setQuizBlock(null)}
+        />
+        <Toast msg={toast} />
+      </Shell>
+    );
+  }
+
   return (
     <Shell banner={reviewBanner}>
       {activeActivity == null ? (
@@ -639,6 +720,8 @@ export default function PandaHanziApp() {
             avatar={myAvatar} onChangeAvatar={() => setAvatarOpen(true)}
             onOpenActivity={setActiveActivity} onOpenArchive={() => setArchiveOpen(true)}
             onOpenAssessment={isEnrolled ? null : () => setAssessOpen(true)} onLogout={logout}
+            quizBlocks={unlockedBlocks(maxLessonNo)} quizResults={quizResults}
+            onOpenQuiz={setQuizBlock}
           />
         )
       ) : (
