@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { levelOfCharSeq, levelOfLesson } from "./theme";
+import { mergeFocus } from "./quiz";
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -98,14 +99,19 @@ export async function saveQuizBank(lessonNo, bank) {
 /* ---- 单元小测的成绩 ----
    和头像一样存在 kv 里（key = "quiz:{名字}"），value 形如
    { "1": {at, correct, total, perLesson:[...]}, "2": {...} }，键是第几张卷子。
-   只留最近一次：家长要看的是「现在哪一课没过」，不是历史曲线。 */
+   只留最近一次：家长要看的是「现在哪一课没过」，不是历史曲线。
+
+   同一行里还挂着 __focus__ = {"字": {r,w}} —— 哪个字认错过几次。
+   下次出题按它加权，错的多考、对的少考（见 quiz.js 的 weightOf）。
+   这个要跨卷子累计，所以不放在某一张卷子下面。 */
 export async function getQuizResults(classId, name) {
   const v = await kvGet(classId, "quiz:" + name);
   return v && typeof v === "object" ? v : {};
 }
-export async function saveQuizResult(classId, name, block, result) {
+export async function saveQuizResult(classId, name, block, result, focusDelta) {
   const all = await getQuizResults(classId, name);
   all[String(block)] = { ...result, at: new Date().toISOString() };
+  if (focusDelta) all.__focus__ = mergeFocus(all.__focus__, focusDelta);
   await kvSet(classId, "quiz:" + name, all);
 }
 

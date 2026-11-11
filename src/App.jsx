@@ -9,7 +9,7 @@ import {
 } from "./supabaseClient";
 import { C, ACTIVITIES, DEFAULT_AVATAR } from "./theme";
 import { toMeta, progressMap } from "./curriculum";
-import { unlockedBlocks } from "./quiz";
+import { unlockedBlocks, mergeFocus } from "./quiz";
 import { preloadAudio } from "./audio";
 import { wordsFor } from "./wordExamples";
 import Panda from "./components/Panda";
@@ -475,8 +475,13 @@ export default function PandaHanziApp() {
       perLesson: report.perLesson.map((l) => ({ lessonNo: l.lessonNo, correct: l.correct, total: l.total })),
       weak: report.weak,
     };
-    setQuizResults((prev) => ({ ...prev, [String(block)]: { ...row, at: new Date().toISOString() } }));
-    saveQuizResult(activeClassId, studentName, block, row)
+    /* 记分表立刻更新：孩子马上点「再做一遍」时，错的那几个字就已经加权了 */
+    setQuizResults((prev) => ({
+      ...prev,
+      [String(block)]: { ...row, at: new Date().toISOString() },
+      __focus__: mergeFocus(prev.__focus__, report.focus),
+    }));
+    saveQuizResult(activeClassId, studentName, block, row, report.focus)
       .catch(() => pushToast("小测成绩没能保存，这份报告仍然有效 ⚠️"));
   }, [activeClassId, studentName, pushToast]);
 
@@ -694,7 +699,7 @@ export default function PandaHanziApp() {
       <Shell>
         <Quiz
           curriculum={curriculum} block={quizBlock} studentName={session.name}
-          lastResult={quizResults[String(quizBlock)]}
+          lastResult={quizResults[String(quizBlock)]} focus={quizResults.__focus__}
           lessonTitleOf={lessonTitleOf} reviewIdOf={reviewIdOf}
           onReview={(id) => { setQuizBlock(null); openReview(id); }}
           onFinish={(report) => finishQuiz(quizBlock, report)}

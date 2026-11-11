@@ -13,6 +13,10 @@ import { passageQuestionsFor } from "./quizPassages";
    报告里「第几课要巩固」才站得住。只出 10 道题分给 5 课，
    一课 2 道，错 1 道就掉到 50%，噪声太大。
 
+   出题跟着孩子走：上回认错的字，这回出现的机会大；连着认对的就少考
+   （见下面的 weightOf 和记分表 focus）。所以重做一遍不是换一套随机题，
+   而是把记不住的那几个字和词再端上来。
+
    三种题型，从「认字」一路推到「读懂」：
      recognize  听字音选字      这个字还认不认得
      cloze      句子挖一个字    放在句子里还认不认得
@@ -40,6 +44,76 @@ export function unlockedBlocks(maxLessonNo) {
   const n = Math.floor((maxLessonNo || 0) / BLOCK_SIZE);
   const out = [];
   for (let i = 1; i <= n; i++) out.push(i);
+  return out;
+}
+
+/* ============================================================
+   记分表 focus：{ "字或词": { r: 对过几次, w: 错过几次 } }
+   存在孩子自己的小测成绩里（kv 的 quiz:{名字} → __focus__）。
+   ============================================================ */
+
+const FRESH = 1;          // 还没考过的字，基准权重
+const WRONG_UP = 2.5;     // 错一次，机会涨这么多
+const RIGHT_DOWN = 0.7;   // 对一次，机会降这么多
+const FLOOR = 0.15;       // 但永远不为 0 —— 会了的字也要偶尔回头看一眼
+const MASTERED_AT = 3;    // 没错过又连对这么多次，就从表里划掉（回到基准）
+const FOCUS_CAP = 600;    // 记分表别无限长
+
+/* 错一次 → 3.5 倍机会；对一次 → 0.3 倍。
+   错过又对回来（w1 r1）是 2.8，还是偏高 —— 刚想起来的字最该再问一遍。 */
+function weightOf(stats, key) {
+  const s = stats && stats[key];
+  if (!s) return FRESH;
+  return Math.max(FLOOR, FRESH + WRONG_UP * (s.w || 0) - RIGHT_DOWN * (s.r || 0));
+}
+
+/* 按权重抽一个（不是直接挑最重的那个 —— 那样每次卷子都一样，
+   孩子背的就是题目顺序了）。 */
+function pickWeighted(arr, weight) {
+  if (!arr || !arr.length) return null;
+  const ws = arr.map(weight);
+  const total = ws.reduce((a, b) => a + b, 0);
+  if (!(total > 0)) return shuffled(arr)[0];
+  let x = Math.random() * total;
+  for (let i = 0; i < arr.length; i++) {
+    x -= ws[i];
+    if (x <= 0) return arr[i];
+  }
+  return arr[arr.length - 1];
+}
+
+/* 这道题考的是哪个字／词。短文题考的是读懂，不挂在某个字上。 */
+export function focusKeyOf(item) {
+  if (!item) return null;
+  if (item.kind === "recognize" || item.kind === "cloze" || item.kind === "wordCloze") {
+    return item.answer;
+  }
+  return null;
+}
+
+/* 把这张卷子的对错并进孩子原来的记分表。 */
+export function mergeFocus(prev, delta) {
+  const out = {};
+  Object.entries(prev || {}).forEach(([k, v]) => {
+    out[k] = { r: Number(v && v.r) || 0, w: Number(v && v.w) || 0 };
+  });
+  Object.entries(delta || {}).forEach(([k, v]) => {
+    const e = out[k] || (out[k] = { r: 0, w: 0 });
+    e.r += Number(v && v.r) || 0;
+    e.w += Number(v && v.w) || 0;
+  });
+  /* 从来没错、又连对够多次的字划掉：一是记分表不会越滚越大，
+     二是这个字回到基准权重，隔一阵还会再考到，不至于再也不出现。 */
+  Object.keys(out).forEach((k) => {
+    if (out[k].w === 0 && out[k].r >= MASTERED_AT) delete out[k];
+  });
+  const keys = Object.keys(out);
+  if (keys.length > FOCUS_CAP) {
+    /* 真超了就先丢权重最低的（那些都是认得的） */
+    keys.sort((a, b) => weightOf(out, a) - weightOf(out, b))
+      .slice(0, keys.length - FOCUS_CAP)
+      .forEach((k) => delete out[k]);
+  }
   return out;
 }
 
@@ -71,8 +145,11 @@ function pickChars(pool, answer, answerPinyin, exclude, n = 3) {
   return shuffled(cand).slice(0, n).map((c) => c.hanzi);
 }
 
-function recognizeItem(lesson, pool) {
-  const c = shuffled(lesson.chars || [])[0];
+/* avoid：这一课在这张卷子里已经考过的字，别一张卷子里问同一个字两遍。 */
+function recognizeItem(lesson, pool, stats, avoid) {
+  const all = lesson.chars || [];
+  const left = avoid ? all.filter((x) => !avoid.has(x.hanzi)) : all;
+  const c = pickWeighted(left.length ? left : all, (x) => weightOf(stats, x.hanzi));
   if (!c) return null;
   const others = pickChars(pool, c.hanzi, c.pinyin);
   if (others.length < 3) return null;
@@ -90,7 +167,7 @@ function recognizeItem(lesson, pool) {
 
    课程库里每课只有一句话，光靠它重做一遍还是那句。老师在「小测题库」
    里多写几句，这里就多几句可抽（extra）。 */
-function clozeItem(lesson, pool, extra) {
+function clozeItem(lesson, pool, extra, stats, avoid) {
   const all = [lesson.sentence, ...(extra || [])]
     .map((x) => String(x || "").trim())
     .filter((x) => x.length >= 3);
@@ -99,7 +176,8 @@ function clozeItem(lesson, pool, extra) {
   const own = new Set((lesson.chars || []).map((c) => c.hanzi));
   const spots = [];
   s.split("").forEach((ch, i) => { if (own.has(ch)) spots.push({ i, ch }); });
-  const spot = shuffled(spots)[0];
+  const left = avoid ? spots.filter((x) => !avoid.has(x.ch)) : spots;
+  const spot = pickWeighted(left.length ? left : spots, (x) => weightOf(stats, x.ch));
   if (!spot) return null;
   const src = (lesson.chars || []).find((c) => c.hanzi === spot.ch);
   /* 句子里已经出现的字不当干扰项：孩子会以为那个字"在句子里见过所以对" */
@@ -142,10 +220,10 @@ function passageItem(block, lesson, used, extraPassages) {
 
 /* 没有手写短文时的替补：句子里挖掉整个词，从四个词里选。
    比挖一个字难一点，也还是在读句子。 */
-function wordClozeItem(lesson, blockLessons) {
+function wordClozeItem(lesson, blockLessons, stats) {
   const s = (lesson.sentence || "").trim();
   const words = (lesson.vocab || []).filter((w) => w && w.length >= 2 && s.includes(w));
-  const word = shuffled(words)[0];
+  const word = pickWeighted(words, (w) => weightOf(stats, w));
   if (!word) return null;
   const pool = [];
   blockLessons.forEach((l) => (l.vocab || []).forEach((w) => {
@@ -166,7 +244,7 @@ function wordClozeItem(lesson, blockLessons) {
 
 /* 出一整张卷子。三种题型各自成段：孩子一段里做的是同一件事，
    不用每道题都重新适应玩法，最后一段才是最费劲的短文。 */
-export function makeQuiz(curriculum, block, bank) {
+export function makeQuiz(curriculum, block, bank, stats) {
   if (!curriculum) return [];
   const lessons = lessonsOfBlock(curriculum, block);
   if (!lessons.length) return [];
@@ -177,13 +255,20 @@ export function makeQuiz(curriculum, block, bank) {
   const usedPassages = new Set();
   lessons.forEach((l) => {
     const mine = bankOf(l.lesson_no);
-    const a = recognizeItem(l, pool);
-    if (a) recog.push(a);
-    const b = clozeItem(l, pool, mine.sentences) || recognizeItem(l, pool);
-    if (b) cloze.push(b);
+    /* 这一课这张卷子已经考过的字，后面的题换一个。
+       先出填空 —— 能挖的字受句子限制（「我画了一个圆」整句只有「圆」
+       是本课的字），可选的最少，让它先挑；听字音从本课十个字里随便挑，
+       让得起。反过来的话这两题常常考到同一个字。 */
+    const used = new Set();
+    const c0 = clozeItem(l, pool, mine.sentences, stats, used);
+    if (c0) used.add(c0.answer);
+    const a = recognizeItem(l, pool, stats, used);
+    if (a) { recog.push(a); used.add(a.answer); }
+    const b = c0 || recognizeItem(l, pool, stats, used);
+    if (b) { cloze.push(b); used.add(b.answer); }
     const c = passageItem(block, l, usedPassages, mine.passages)
-      || wordClozeItem(l, lessons)
-      || clozeItem(l, pool, mine.sentences);
+      || wordClozeItem(l, lessons, stats)
+      || clozeItem(l, pool, mine.sentences, stats, used);
     if (c) read.push(c);
   });
 
@@ -204,11 +289,18 @@ export function verdictFor(correct, total) {
 
 export function gradeQuiz(items, answers) {
   const per = new Map();
+  const focus = {};     // 这张卷子每个字／词的对错，回头并进孩子的记分表
   items.forEach((it, i) => {
     const e = per.get(it.lessonNo) || { lessonNo: it.lessonNo, correct: 0, total: 0 };
     e.total += 1;
-    if (answers[i] === it.answer) e.correct += 1;
+    const right = answers[i] === it.answer;
+    if (right) e.correct += 1;
     per.set(it.lessonNo, e);
+    const k = focusKeyOf(it);
+    if (k) {
+      const f = focus[k] || (focus[k] = { r: 0, w: 0 });
+      if (right) f.r += 1; else f.w += 1;
+    }
   });
   const perLesson = Array.from(per.values()).sort((a, b) => a.lessonNo - b.lessonNo);
   perLesson.forEach((l) => { l.verdict = verdictFor(l.correct, l.total).key; });
@@ -217,5 +309,8 @@ export function gradeQuiz(items, answers) {
     correct: perLesson.reduce((a, b) => a + b.correct, 0),
     perLesson,
     weak: perLesson.filter((l) => l.verdict === "weak").map((l) => l.lessonNo),
+    focus,
+    /* 这回认错的字和词 —— 报告里列出来，下回它们出现的机会最大 */
+    missed: Object.keys(focus).filter((k) => focus[k].w > 0),
   };
 }

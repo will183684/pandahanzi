@@ -21,8 +21,9 @@ const SECTION_OF = {
 
 /* lessonTitleOf(lessonNo) -> "L1 第3课"；reviewIdOf(lessonNo) -> 本班那一课的
    class_lesson id（没上过就是 null，那就不给「去复习」按钮）。 */
+/* focus：孩子的字词记分表 {"字": {r,w}}，出题按它加权 —— 认错过的多考。 */
 export default function Quiz({
-  curriculum, block, studentName, lastResult,
+  curriculum, block, studentName, lastResult, focus,
   lessonTitleOf, reviewIdOf, onReview, onExit, onFinish,
 }) {
   const [phase, setPhase] = useState("intro");     // intro | running | done
@@ -54,10 +55,12 @@ export default function Quiz({
   }, []);
 
   const start = useCallback(() => {
-    const list = makeQuiz(curriculum, block, bankRef.current || {});
+    const list = makeQuiz(curriculum, block, bankRef.current || {}, focus);
     setItems(list);
     setAnswers([]); setIi(0); setPicked(null);
     setPhase("running");
+    /* focus 是进屏时拿到的那一份，整张卷子用同一份；做完回到这屏，
+       App 已经把新的记分表推下来了，下一张就按新的出。 */
     /* 听字音那几题要用老师的录音。先一次性捞回来，捞到之前不自动放音 ——
        不然机器音先念一遍、录音到了再念一遍，孩子听见同一个字说两次。 */
     setAudioReady(false);
@@ -70,7 +73,7 @@ export default function Quiz({
       })
       .catch(() => setAudioMap({}))
       .finally(() => setAudioReady(true));
-  }, [curriculum, block]);
+  }, [curriculum, block, focus]);
 
   /* 听字音：进到新题自动放一次（只放一次，见 playedRef）。
      短文题把问句念出来 —— 「什么时候」这种词孩子还不认得，
@@ -126,6 +129,9 @@ export default function Quiz({
             <div>🔊 听字音 · 5 题</div>
             <div style={{ marginTop: 4 }}>📝 读句子 · 5 题</div>
             <div style={{ marginTop: 4 }}>📖 读短文 · 5 题</div>
+            <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${C.gold}66`, color: "#8A8276" }}>
+              🎯 上回认错的字，这回会多考几次；认得牢的少考。
+            </div>
           </div>
           {lastResult && (
             <p style={{ fontSize: 13, color: "#9C9382", marginTop: 0 }}>
@@ -191,6 +197,27 @@ export default function Quiz({
               );
             })}
           </div>
+
+          {/* 这回认错的字和词：下一张卷子它们出现的机会最大 */}
+          {report.missed.length > 0 && (
+            <div style={{
+              textAlign: "left", background: "#FFFBF2", border: `2px solid ${C.gold}55`,
+              borderRadius: 14, padding: "12px 14px", marginBottom: 14,
+            }}>
+              <div style={{ fontSize: 14, color: "#6B6356", marginBottom: 8 }}>
+                🎯 这几个还没记牢，下次小测会多考：
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {report.missed.map((k) => (
+                  <span key={k} style={{
+                    fontSize: k.length > 1 ? 20 : 26, fontWeight: 800, color: C.ink,
+                    background: "#fff", border: `2px solid ${C.gold}`, borderRadius: 10,
+                    padding: k.length > 1 ? "4px 10px" : "2px 10px",
+                  }}>{k}</span>
+                ))}
+              </div>
+            </div>
+          )}
 
           <p style={{ fontSize: 14, color: "#6B6356", lineHeight: 1.8, textAlign: "left" }}>
             {allGood
