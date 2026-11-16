@@ -41,7 +41,17 @@ export default function Quiz({
     [phase, items, answers]
   );
 
-  useEffect(() => stopAudio, []);
+  /* 答错要多停一会儿（见 choose），这中间孩子可能点「退出」。
+     定时器不收掉的话，人已经离开了还会跳下一题 / 算成绩。 */
+  const timersRef = useRef([]);
+  const later = useCallback((fn, ms) => {
+    timersRef.current.push(setTimeout(fn, ms));
+  }, []);
+  useEffect(() => () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    stopAudio();
+  }, []);
 
   /* 老师自己加的句子和短文。进这一屏就先取，等孩子看完说明点「开始」，
      一般已经到了；没到就等它（出题要用），所以 start 里不直接用 state。 */
@@ -96,19 +106,39 @@ export default function Quiz({
     return undefined;
   }, [phase, item, ii, audioMap, audioReady]);
 
+  /* 答对 0.75 秒就走，答错停 1.8 秒还要把正确答案念出来。
+
+     原来对错都是 750ms：抖动动画自己就占 0.4 秒，孩子的眼睛全在自己点的
+     那个红框上，正确答案那个绿框一闪就过去了 —— 等于错了也不知道正确的
+     是哪个，这道题白错。念一遍是因为认字的孩子未必看得出绿框是什么意思。 */
+  const RIGHT_HOLD = 750;
+  const WRONG_HOLD = 1800;
+
   const choose = (opt) => {
     if (picked != null) return;
     setPicked(opt);
     const next = answers.slice();
     next[ii] = opt;
     setAnswers(next);
-    setTimeout(() => {
+
+    const right = opt === item.answer;
+    if (!right) {
+      /* 等抖动演完再出声，不然声音和晃动撞在一起，哪个都没听清看清。
+         单个字优先放老师的录音（playChar 没录音会自动退回机器音），
+         整词和短文选项用读的 —— 一个字一个字蹦出来反而不像话。 */
+      later(() => {
+        if (String(item.answer).length === 1) playChar(item.answer, audioMap);
+        else speak(item.answer, { rate: 0.6 });
+      }, 400);
+    }
+
+    later(() => {
       setPicked(null);
       if (ii + 1 < items.length) { setIi(ii + 1); return; }
       stopAudio();
       setPhase("done");
       if (onFinish) onFinish(gradeQuiz(items, next));
-    }, 750);
+    }, right ? RIGHT_HOLD : WRONG_HOLD);
   };
 
   /* ---------------- 开始前 ---------------- */
@@ -341,19 +371,35 @@ function Options({ item, picked, onPick, wide }) {
         const isPicked = picked === opt;
         const isAnswer = opt === item.answer;
         const show = picked != null;
+        /* 选错了的时候，正确答案那个要跳出来 —— 光是变绿，孩子的眼睛
+           全在自己点的那个红框上，根本注意不到。 */
+        const reveal = show && isAnswer && !isPicked;
         return (
           <button
             key={opt}
             onClick={() => onPick(opt)}
             style={{
+              position: "relative",
               minHeight: long ? 60 : 88, borderRadius: 18,
               fontSize: long ? 26 : 50, fontWeight: 800, color: C.ink,
               cursor: show ? "default" : "pointer",
               border: `3px solid ${show && isAnswer ? C.bamboo : show && isPicked ? C.red : C.border}`,
               background: show && isAnswer ? "#EAF6EC" : show && isPicked ? "#FFF1F0" : C.card,
-              animation: show && isPicked && !isAnswer ? "pa-shake .4s" : "none",
+              boxShadow: reveal ? `0 0 0 4px ${C.bamboo}33` : "none",
+              animation: show && isPicked && !isAnswer
+                ? "pa-shake .4s"
+                : reveal ? "pa-pulse .6s ease-in-out .3s 2" : "none",
             }}
-          >{opt}</button>
+          >
+            {opt}
+            {reveal && (
+              <span style={{
+                position: "absolute", top: -10, right: -8,
+                width: 28, height: 28, borderRadius: "50%", background: C.bamboo,
+                color: "#fff", fontSize: 16, lineHeight: "28px", fontWeight: 900,
+              }}>✓</span>
+            )}
+          </button>
         );
       })}
     </div>
