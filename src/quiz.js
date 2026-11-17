@@ -289,10 +289,10 @@ export function makeQuiz(curriculum, block, bank, stats) {
 export function spokenTextsOf(curriculum, block, bank) {
   if (!curriculum) return [];
   const out = new Map();
-  const add = (text, kind, lessonNo) => {
+  const add = (text, kind, lessonNo, source) => {
     const t = String(text || "").trim();
     if (t.length < 2) return;                       // 单个字不算
-    if (!out.has(t)) out.set(t, { text: t, kind, lessonNo });
+    if (!out.has(t)) out.set(t, { text: t, kind, lessonNo, source });
   };
 
   const lessons = lessonsOfBlock(curriculum, block);
@@ -301,14 +301,17 @@ export function spokenTextsOf(curriculum, block, bank) {
     const mine = (bank && bank[l.lesson_no]) || {};
     const qs = [];
     builtIn.forEach((p) => (p.questions || []).forEach((q) => {
-      if (q.lesson === l.lesson_no) qs.push(q);
+      if (q.lesson === l.lesson_no) qs.push({ q, source: "builtin" });
     }));
     (mine.passages || []).forEach((p) => (p.questions || []).forEach((q) => {
-      if (q && q.q && q.a) qs.push(q);
+      if (q && q.q && q.a) qs.push({ q, source: "teacher" });
     }));
-    qs.forEach((q) => { add(q.q, "question", l.lesson_no); add(q.a, "answer", l.lesson_no); });
+    qs.forEach(({ q, source }) => {
+      add(q.q, "question", l.lesson_no, source);
+      add(q.a, "answer", l.lesson_no, source);
+    });
     /* 这一课没有短文题 → 小测会退回词语填空，那些词也要念 */
-    if (!qs.length) (l.vocab || []).forEach((w) => add(w, "answer", l.lesson_no));
+    if (!qs.length) (l.vocab || []).forEach((w) => add(w, "answer", l.lesson_no, "builtin"));
   });
   return Array.from(out.values()).sort((a, b) => a.lessonNo - b.lessonNo);
 }

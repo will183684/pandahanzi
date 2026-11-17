@@ -6,6 +6,7 @@ import { playChar, stopAudio } from "../audio";
 import { getWordAudios, saveWordAudio, getQuizBank } from "../supabaseClient";
 import { blockLabel, blockRange, spokenTextsOf, BLOCK_SIZE, QUIZ_SIZE } from "../quiz";
 import Quiz from "./Quiz";
+import QuizBankEditor from "./QuizBankEditor";
 
 /* ===================================================================
    老师端的小测页。
@@ -39,14 +40,16 @@ export default function QuizStudio({ curriculum, session, maxLessonNo, pushToast
 
   useEffect(() => () => stopAudio(), []);
 
-  /* 老师自己加的题也要能录音，所以题库要一起拉回来 */
+  /* 老师自己加的题也要能录音，所以题库要一起拉回来。
+     bankTick：老师在下面加完题点保存，重拉一次，新问句立刻出现在录音清单里。 */
+  const [bankTick, setBankTick] = useState(0);
   useEffect(() => {
     let alive = true;
     getQuizBank()
       .then((b) => { if (alive) setBank(b); })
       .catch(() => { if (alive) setBank({}); });
     return () => { alive = false; };
-  }, []);
+  }, [bankTick]);
 
   const texts = useMemo(
     () => (bank ? spokenTextsOf(curriculum, block, bank) : []),
@@ -124,6 +127,10 @@ export default function QuizStudio({ curriculum, session, maxLessonNo, pushToast
   const done = texts.filter((t) => audio[t.text]).length;
   const blocks = [];
   for (let i = 1; i <= maxBlock; i++) blocks.push(i);
+  /* 这张卷子的五课，下面按课给一块题库编辑 */
+  const lessons = ((curriculum && curriculum.lessons) || [])
+    .filter((l) => l.lesson_no >= from && l.lesson_no <= to)
+    .sort((a, b) => a.lesson_no - b.lesson_no);
 
   return (
     <>
@@ -199,6 +206,7 @@ export default function QuizStudio({ curriculum, session, maxLessonNo, pushToast
                   <b style={{ fontSize: 16 }}>{t.text}</b>
                   <span style={{ display: "block", fontSize: 12, color: "#9C9382" }}>
                     第{t.lessonNo}课 · {t.kind === "question" ? "短文的问句" : "正确答案（答错时念）"}
+                    {t.source === "teacher" ? " · ✏️ 你加的" : ""}
                     {"　"}
                     <span style={{ color: url ? C.bamboo : "#B9AF9D", fontWeight: 700 }}>
                       {url ? "📻 已录" : "🤖 机器音"}
@@ -224,6 +232,38 @@ export default function QuizStudio({ curriculum, session, maxLessonNo, pushToast
               </div>
             );
           })}
+        </div>
+      </Card>
+
+      <Card>
+        <h3 style={{ marginTop: 0 }}>✏️ 加题
+          <span style={{ fontSize: 13, color: "#9C9382", fontWeight: 600 }}>{blockLabel(block)}</span>
+        </h3>
+        <p style={{ color: "#8A8276", fontSize: 14, lineHeight: 1.7, marginTop: 0 }}>
+          上面那些题是内置的，文字不能改；但你可以自己加 —— 加进来的和内置的一起抽。
+          课程库里每课只有一句话，「读句子」那五题就永远在这五句上打转，
+          <b>每课随手加两三句</b>，孩子重做就不容易碰上一样的题。
+        </p>
+        <p style={{ fontSize: 13, color: "#9C9382", marginTop: 0 }}>
+          加完点那一块自己的「保存题库」。存好以后，新的问句和答案会出现在上面的录音清单里，可以接着录。
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {lessons.map((l) => (
+            <QuizBankEditor
+              key={l.lesson_no}
+              lessonNo={l.lesson_no}
+              lessonChars={l.chars || []}
+              curriculum={curriculum}
+              pushToast={pushToast}
+              label={`📝 第${l.lesson_no}课`}
+              hint={(l.chars || []).map((c) => c.hanzi).join("")}
+              onSaved={() => setBankTick((t) => t + 1)}
+            />
+          ))}
+          {!lessons.length && (
+            <p style={{ color: "#9C9382" }}>第{from}–{to}课的课程还没建好，暂时加不了题。</p>
+          )}
         </div>
       </Card>
     </>

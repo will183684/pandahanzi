@@ -22,7 +22,12 @@ import { getQuizBankFor, saveQuizBank } from "../supabaseClient";
 const emptyQuestion = () => ({ q: "", a: "", d: ["", "", ""] });
 const emptyPassage = () => ({ text: "", questions: [emptyQuestion()] });
 
-export default function QuizBankEditor({ lessonNo, lessonChars, curriculum, pushToast }) {
+export default function QuizBankEditor({
+  lessonNo, lessonChars, curriculum, pushToast,
+  /* 「小测」页里按课排了一排，标题要写成「第3课 · 有牛水中…」才分得清，
+     所以标题和说明可以从外面给；课程编辑那边不传，用默认的。 */
+  label, hint, onSaved,
+}) {
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [sentences, setSentences] = useState("");
@@ -129,11 +134,13 @@ export default function QuizBankEditor({ lessonNo, lessonChars, curriculum, push
       await saveQuizBank(lessonNo, { sentences: sentenceList, passages: clean });
       setDirty(false);
       pushToast(`已存进第${lessonNo}课的小测题库 ✅　句子 ${sentenceList.length} 句 · 短文 ${clean.length} 篇`);
+      /* 「小测」页要跟着刷新：老师刚加的问句和答案也该出现在录音清单里 */
+      if (onSaved) onSaved();
     } catch (e) {
       pushToast("题库保存失败 ⚠️");
     }
     setSaving(false);
-  }, [passages, sentenceList, lessonNo, pushToast]);
+  }, [passages, sentenceList, lessonNo, pushToast, onSaved]);
 
   if (!lessonNo) return null;
 
@@ -153,9 +160,11 @@ export default function QuizBankEditor({ lessonNo, lessonChars, curriculum, push
           cursor: "pointer", minHeight: 44,
         }}
       >
-        <span style={{ fontWeight: 800, fontSize: 15 }}>📝 小测题库（选填）　{open ? "▾" : "▸"}</span>
+        <span style={{ fontWeight: 800, fontSize: 15 }}>
+          {label || "📝 小测题库（选填）"}　{open ? "▾" : "▸"}
+        </span>
         <span style={{ display: "block", fontSize: 13, color: "#8A8276", marginTop: 2 }}>
-          给这一课多写几个句子、一两篇小短文，孩子做单元小测时就能抽到，重做不容易碰上一样的题。
+          {hint || "给这一课多写几个句子、一两篇小短文，孩子做单元小测时就能抽到，重做不容易碰上一样的题。"}
         </span>
       </button>
 
