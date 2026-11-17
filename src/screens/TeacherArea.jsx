@@ -8,6 +8,7 @@ import TeacherManager from "./TeacherManager";
 import ClassManager from "./ClassManager";
 import CurriculumBrowser from "./CurriculumBrowser";
 import AssessmentAdmin from "./AssessmentAdmin";
+import QuizStudio from "./QuizStudio";
 
 /* Shared ghost-button style, also reused by the review banner in App. */
 export const ghostBtn = {
@@ -26,7 +27,7 @@ export const ghostBtn = {
    =================================================================== */
 export default function TeacherArea({
   role, className, roster, activeClassId, classLessons, charsOf, session,
-  lesson, chars, charsFor, progressRows, profiles, level, curriculum, myClassIds,
+  lesson, chars, charsFor, progressRows, profiles, level, curriculum, myClassIds, maxLessonNo,
   onOpenPicker, onSaveLesson, onSaveChars, onCompleteLesson, onAfterSave,
   onOpenArchive, onLogout, onLeaveClass, onSaveClasses, pushToast, busy,
 }) {
@@ -38,6 +39,9 @@ export default function TeacherArea({
   const tabs = [{ k: "dashboard", t: "📊 进度" }];
   if (!isAdmin) tabs.push({ k: "editor", t: "📚 课程编辑" });
   tabs.push({ k: "curriculum", t: "📖 课程库" });   // 教务和老师都能查看课程库
+  /* 小测老师原来根本看不到（只长在孩子那一屏），也不知道上哪儿给里面的
+     声音录音。这一页管这两件事：试做一遍 + 给问句和答案录音。 */
+  tabs.push({ k: "quiz", t: "📝 小测" });
   if (isAdmin) {
     tabs.push(
       { k: "classes", t: "🏫 班级" },
@@ -128,6 +132,12 @@ export default function TeacherArea({
           classLessons={classLessons} charsOf={charsOf} curriculum={curriculum}
           session={session} pushToast={pushToast}
           onAfterSave={onAfterSave} onOpenPicker={onOpenPicker}
+        />
+      )}
+      {view === "quiz" && (
+        <QuizStudio
+          curriculum={curriculum} session={session}
+          maxLessonNo={maxLessonNo} pushToast={pushToast}
         />
       )}
       {view === "curriculum" && (

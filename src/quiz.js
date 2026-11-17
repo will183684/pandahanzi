@@ -1,6 +1,6 @@
 import { shuffled } from "./utils";
 import { soundsAlike } from "./polyphones";
-import { passageQuestionsFor } from "./quizPassages";
+import { PASSAGES, passageQuestionsFor } from "./quizPassages";
 
 /* ============================================================
    单元小测 —— 每五课一张卷子，15 道题，做完指出哪一课要回去巩固。
@@ -273,6 +273,44 @@ export function makeQuiz(curriculum, block, bank, stats) {
   });
 
   return [...shuffled(recog), ...shuffled(cloze), ...shuffled(read)];
+}
+
+/* ============================================================
+   这张卷子里「要念出来的整句整词」—— 老师可以给它们录音。
+
+   单个字不在这张清单里：那些走的是单字录音，老师在「课程编辑」里
+   录过就自动生效，小测这边一直在用。这里只列机器音念的那些：
+     question  短文的问句（每次出现都会念一遍给孩子听）
+     answer    多字的正确答案（答错时念出来）
+
+   还没写手写短文的单元（第31课往后）退回「词语填空」，那几个词也会
+   被念到，所以也列进来。
+   ============================================================ */
+export function spokenTextsOf(curriculum, block, bank) {
+  if (!curriculum) return [];
+  const out = new Map();
+  const add = (text, kind, lessonNo) => {
+    const t = String(text || "").trim();
+    if (t.length < 2) return;                       // 单个字不算
+    if (!out.has(t)) out.set(t, { text: t, kind, lessonNo });
+  };
+
+  const lessons = lessonsOfBlock(curriculum, block);
+  const builtIn = PASSAGES[block] || [];
+  lessons.forEach((l) => {
+    const mine = (bank && bank[l.lesson_no]) || {};
+    const qs = [];
+    builtIn.forEach((p) => (p.questions || []).forEach((q) => {
+      if (q.lesson === l.lesson_no) qs.push(q);
+    }));
+    (mine.passages || []).forEach((p) => (p.questions || []).forEach((q) => {
+      if (q && q.q && q.a) qs.push(q);
+    }));
+    qs.forEach((q) => { add(q.q, "question", l.lesson_no); add(q.a, "answer", l.lesson_no); });
+    /* 这一课没有短文题 → 小测会退回词语填空，那些词也要念 */
+    if (!qs.length) (l.vocab || []).forEach((w) => add(w, "answer", l.lesson_no));
+  });
+  return Array.from(out.values()).sort((a, b) => a.lessonNo - b.lessonNo);
 }
 
 /* ---------------- 判分 ---------------- */

@@ -612,6 +612,7 @@ export default function PandaHanziApp() {
             level={viewMeta ? viewMeta.level : null}
             curriculum={curriculum}
             myClassIds={session.role === "teacher" ? (session.classIds || []) : null}
+            maxLessonNo={maxLessonNo}
             busy={busy}
             onOpenPicker={() => setPickerOpen(true)}
             onSaveLesson={saveLesson}

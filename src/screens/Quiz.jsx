@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { C } from "../theme";
 import { Card, BigButton, Confetti } from "../components/ui";
 import Panda from "../components/Panda";
-import { playChar, speak, stopAudio } from "../audio";
-import { getSharedAudioByHanzi, getQuizBank } from "../supabaseClient";
+import { playChar, stopAudio } from "../audio";
+import { getSharedAudioByHanzi, getWordAudios, getQuizBank } from "../supabaseClient";
 import { makeQuiz, gradeQuiz, blockLabel, verdictFor, QUIZ_SIZE } from "../quiz";
 
 /* ===================================================================
@@ -75,10 +75,22 @@ export default function Quiz({
        不然机器音先念一遍、录音到了再念一遍，孩子听见同一个字说两次。 */
     setAudioReady(false);
     const want = list.filter((i) => i.kind === "recognize").map((i) => i.answer);
-    getSharedAudioByHanzi(want)
-      .then((m) => {
+    /* 短文的问句、多字的正确答案：老师在「🎤 小测录音」里录过就放真人声，
+       没录过 playChar 会自动退回机器音。单字和整句整词放在同一张表里
+       —— 键不会撞（一个是单字，一个是整句），下面播放时不用分两套。 */
+    const wantText = [];
+    list.forEach((i) => {
+      if (i.kind === "passage") wantText.push(i.question);
+      if (String(i.answer).length > 1) wantText.push(i.answer);
+    });
+    Promise.all([
+      getSharedAudioByHanzi(want).catch(() => new Map()),
+      getWordAudios(wantText).catch(() => new Map()),
+    ])
+      .then(([m, wm]) => {
         const out = {};
-        m.forEach((v, h) => { if (v.audio_url) out[h] = v.audio_url; });
+        m.forEach((v, h) => { if (v && v.audio_url) out[h] = v.audio_url; });
+        wm.forEach((v, t) => { if (v && v.audio_url) out[t] = v.audio_url; });
         setAudioMap(out);
       })
       .catch(() => setAudioMap({}))
@@ -100,7 +112,8 @@ export default function Quiz({
     }
     if (item.kind === "passage") {
       playedRef.current = key;
-      const t = setTimeout(() => speak(item.question, { rate: 0.75 }), 500);
+      /* playChar 会先找老师的录音，没有才用机器音 —— 问句也一样 */
+      const t = setTimeout(() => playChar(item.question, audioMap, { rate: 0.75 }), 500);
       return () => clearTimeout(t);
     }
     return undefined;
@@ -124,11 +137,10 @@ export default function Quiz({
     const right = opt === item.answer;
     if (!right) {
       /* 等抖动演完再出声，不然声音和晃动撞在一起，哪个都没听清看清。
-         单个字优先放老师的录音（playChar 没录音会自动退回机器音），
-         整词和短文选项用读的 —— 一个字一个字蹦出来反而不像话。 */
+         优先放老师的录音（单字录音，或者整词整句录音），
+         没录过 playChar 自动退回机器音。 */
       later(() => {
-        if (String(item.answer).length === 1) playChar(item.answer, audioMap);
-        else speak(item.answer, { rate: 0.6 });
+        playChar(item.answer, audioMap, { rate: 0.6 });
       }, 400);
     }
 
@@ -344,7 +356,7 @@ export default function Quiz({
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
             <b style={{ fontSize: 20 }}>{item.question}</b>
             <button
-              onClick={() => speak(item.question, { rate: 0.75 })}
+              onClick={() => playChar(item.question, audioMap, { rate: 0.75 })}
               aria-label="再听一遍问题"
               style={{
                 minHeight: 44, minWidth: 44, borderRadius: 12, border: `2px solid ${C.bamboo}`,
