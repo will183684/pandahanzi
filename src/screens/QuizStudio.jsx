@@ -33,6 +33,8 @@ export default function QuizStudio({ curriculum, session, maxLessonNo, pushToast
   const [trying, setTrying] = useState(false);
   const [bank, setBank] = useState(null);
   const [audio, setAudio] = useState({});       // 文字 -> 录音网址
+  const [audioBy, setAudioBy] = useState({});   // 文字 -> 谁录的
+  const [justSaved, setJustSaved] = useState(() => new Set());
   const [loading, setLoading] = useState(true);
 
   const recorder = useRecorder({ pushToast, maxMs: 6000 });   // 录一句话，3 秒不够
@@ -58,30 +60,42 @@ export default function QuizStudio({ curriculum, session, maxLessonNo, pushToast
 
   /* 哪些已经录过了 */
   const refreshAudio = useCallback(() => {
-    if (!texts.length) { setAudio({}); setLoading(false); return undefined; }
+    if (!texts.length) { setAudio({}); setAudioBy({}); setLoading(false); return undefined; }
     let alive = true;
     setLoading(true);
     getWordAudios(texts.map((t) => t.text))
       .then((m) => {
         if (!alive) return;
         const out = {};
-        m.forEach((v, t) => { if (v && v.audio_url) out[t] = v.audio_url; });
+        const by = {};
+        m.forEach((v, t) => {
+          if (v && v.audio_url) { out[t] = v.audio_url; by[t] = v.teacher_name || ""; }
+        });
         setAudio(out);
+        setAudioBy(by);
       })
-      .catch(() => { if (alive) setAudio({}); })
+      .catch(() => { if (alive) { setAudio({}); setAudioBy({}); } })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, [texts]);
 
   useEffect(refreshAudio, [refreshAudio]);
 
+  /* 这一页录完就存，没有保存按钮 —— 老师从「课程编辑」过来，那边是要点
+     保存的，所以她不确定存没存上，一条反复录好几遍。写完再回头查一次库，
+     确认真有这条才说「存好了」，并且把那一行标成刚存好，让她看得见。 */
   const onGot = (text) => async (url) => {
     try {
       await saveWordAudio(text, session && session.name, url);
-      setAudio((prev) => ({ ...prev, [text]: url }));
-      pushToast("录好了，已经生效 ✅");
+      const back = await getWordAudios([text]);
+      const row = back.get(text);
+      if (!row || !row.audio_url) throw new Error("not stored");
+      setAudio((prev) => ({ ...prev, [text]: row.audio_url }));
+      setAudioBy((prev) => ({ ...prev, [text]: row.teacher_name || (session && session.name) || "" }));
+      setJustSaved((prev) => { const s = new Set(prev); s.add(text); return s; });
+      pushToast("已经存好了 ✅ 这一页不用点保存");
     } catch (e) {
-      pushToast("录音存不进去 ⚠️");
+      pushToast("没存上，请再录一次 ⚠️");
     }
   };
 
@@ -175,6 +189,16 @@ export default function QuizStudio({ curriculum, session, maxLessonNo, pushToast
         <p style={{ color: "#8A8276", fontSize: 14, lineHeight: 1.7, marginTop: 0 }}>
           下面这些默认是机器音。录一条就换成你的声音，<b>全站共用</b>，别的班也听得到。
         </p>
+        {/* 老师从「课程编辑」过来会找保存按钮（那边确实要点保存），
+            找不到就不敢信，一条反复录。这里把话说死。 */}
+        <div style={{
+          background: "#F7FBF7", border: `2px solid ${C.bamboo}55`, borderRadius: 12,
+          padding: "10px 12px", fontSize: 14, color: "#4A6B4F", lineHeight: 1.7, marginBottom: 12,
+        }}>
+          🔒 <b>这一页没有保存按钮，录完就直接存好了</b>，不用再点别的。
+          存上了那一行会变绿、写上「📻 已录」和你的名字，按钮也变成「🎤 重录」——
+          看到这三样就是成了，不用重录。
+        </div>
         <div style={{
           background: "#FFFBF2", border: `2px solid ${C.gold}55`, borderRadius: 12,
           padding: "10px 12px", fontSize: 13, color: "#6B6356", lineHeight: 1.7, marginBottom: 14,
@@ -209,8 +233,11 @@ export default function QuizStudio({ curriculum, session, maxLessonNo, pushToast
                     {t.source === "teacher" ? " · ✏️ 你加的" : ""}
                     {"　"}
                     <span style={{ color: url ? C.bamboo : "#B9AF9D", fontWeight: 700 }}>
-                      {url ? "📻 已录" : "🤖 机器音"}
+                      {url ? `📻 已录${audioBy[t.text] ? ` · ${audioBy[t.text]}` : ""}` : "🤖 机器音"}
                     </span>
+                    {justSaved.has(t.text) && (
+                      <span style={{ color: C.bamboo, fontWeight: 700 }}>　刚存好 ✅</span>
+                    )}
                   </span>
                 </span>
                 <button onClick={() => listen(t)} title="听听孩子现在听到的" style={{
