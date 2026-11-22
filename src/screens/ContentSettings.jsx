@@ -323,13 +323,15 @@ export default function ContentSettings({
     if (clean.length === 0) { pushToast("至少留一个字"); return; }
     const dupe = clean.map((r) => r.hanzi).find((h, i, a) => a.indexOf(h) !== i);
     if (dupe) { pushToast(`「${dupe}」重复了，请删掉一个`); return; }
-    /* 额外字只有录音要存，不进本课字表 */
+    /* 额外字只有录音要存，不进本课字表。
+       reRecorded 必须带出去 —— 课程库那条保存路径靠它判断「这段是刚录的
+       才写库」，丢了标记整条就被跳过，界面还照样报已保存。 */
     const extras = Object.entries(extraAudio)
       .filter(([, v]) => v && v.audio_url && v.reRecorded)
-      .map(([hanzi, v]) => ({ hanzi, audio_url: v.audio_url }));
+      .map(([hanzi, v]) => ({ hanzi, audio_url: v.audio_url, reRecorded: true }));
     const wordAudios = Object.entries(wordAudio)
       .filter(([, v]) => v && v.audio_url && v.reRecorded)
-      .map(([word, v]) => ({ word, audio_url: v.audio_url }));
+      .map(([word, v]) => ({ word, audio_url: v.audio_url, reRecorded: true }));
     onSaveChars(clean, extras, wordAudios);
     onSaveLesson({
       title: title.trim() || lesson.title,

@@ -142,16 +142,32 @@ export default function CurriculumBrowser({ curriculum, myClassIds, activeClassI
     let failed = false;
     const byHanzi = new Map((curriculum.characters || []).map((c) => [c.hanzi, c]));
     const by = (session && session.name) || "老师";
-    for (const row of [...rows, ...extras]) {
+    let saved = 0;
+    const missing = [];
+    /* rows 里大多是打开这一课时从库里读出来的旧录音，只写刚录的那几条 ——
+       不然每点一次保存，所有字的录音都盖成当前这位老师的名字。
+       extras 和 wordAudios 进来之前已经按 reRecorded 筛过了，这里不再筛：
+       之前这儿多判了一次 reRecorded，而打包时没把标记带出来，结果「其他字」
+       录的音条条被跳过，界面还报已保存。 */
+    const todo = [
+      ...rows.filter((r) => r.reRecorded),
+      ...extras,
+    ];
+    for (const row of todo) {
       const ch = byHanzi.get(row.hanzi);
-      if (!row.audio_url || !ch || !row.reRecorded) continue;
-      try { await saveSharedAudio(ch.id, by, row.audio_url); } catch (e) { failed = true; }
+      if (!row.audio_url) continue;
+      if (!ch) { missing.push(row.hanzi); continue; }   // 字库里没有这个字
+      try { await saveSharedAudio(ch.id, by, row.audio_url); saved += 1; }
+      catch (e) { failed = true; }
     }
     for (const w of wordAudios) {
-      try { await saveWordAudio(w.word, by, w.audio_url); } catch (e) { failed = true; }
+      try { await saveWordAudio(w.word, by, w.audio_url); saved += 1; }
+      catch (e) { failed = true; }
     }
     setBusy(false);
     if (failed) pushToast("有录音没能存进共享库 ⚠️");
+    else if (missing.length) pushToast(`「${missing.join("")}」不在字库里，这几段没能存 ⚠️`);
+    else if (saved) pushToast(`录音存好了 ✅　${saved} 段`);
   }, [editing, curriculum, session, pushToast]);
 
   const saveLibLesson = useCallback(async (patch) => {
