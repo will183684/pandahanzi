@@ -446,6 +446,51 @@ export async function saveWordAudio(word, teacherName, audioUrl) {
   if (error) throw error;
 }
 
+/* ---- 认领录音 ----
+   录音是「先传文件、后写库」两步。2026-09-12 到 11-21 之间，从课程库的
+   「其他字」那一栏录的音写库那步被静默跳过了（见 4287b07），文件传上去了
+   却没人认领它 —— 文件名只有时间戳，没有字。这几个函数把「库里躺着、
+   没有任何记录指向它」的文件找出来，让老师听一遍、认回到字上。 */
+export async function listAudioFiles() {
+  const out = [];
+  for (let off = 0; ; off += 1000) {
+    const { data, error } = await supabase.storage.from("lesson_audios")
+      .list("", { limit: 1000, offset: off, sortBy: { column: "created_at", order: "asc" } });
+    if (error) throw error;
+    out.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
+export function audioPublicUrl(name) {
+  const { data } = supabase.storage.from("lesson_audios").getPublicUrl(name);
+  return data.publicUrl;
+}
+
+/* 已经被认领的文件名（单字录音 + 整词整句录音都算） */
+export async function getClaimedAudioNames() {
+  const names = new Set();
+  const grab = (rows) => (rows || []).forEach((r) => {
+    const m = /\/lesson_audios\/(.+)$/.exec(r.audio_url || "");
+    if (m) names.add(decodeURIComponent(m[1]));
+  });
+  const a = await supabase.from("shared_audios").select("audio_url");
+  if (a.error) throw a.error;
+  grab(a.data);
+  const b = await supabase.from("shared_word_audios").select("audio_url");
+  if (b.error) throw b.error;
+  grab(b.data);
+  return names;
+}
+
+/* 哪些字已经有录音了（认领时把它们排到后面） */
+export async function getCharIdsWithAudio() {
+  const { data, error } = await supabase.from("shared_audios").select("char_id");
+  if (error) throw error;
+  return new Set((data || []).map((r) => r.char_id));
+}
+
 export async function saveSharedAudio(charId, teacherName, audioUrl) {
   const { error } = await supabase.from("shared_audios").upsert(
     { char_id: charId, teacher_name: teacherName, audio_url: audioUrl, updated_at: new Date().toISOString() },
