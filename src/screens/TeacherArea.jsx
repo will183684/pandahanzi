@@ -9,7 +9,6 @@ import ClassManager from "./ClassManager";
 import CurriculumBrowser from "./CurriculumBrowser";
 import AssessmentAdmin from "./AssessmentAdmin";
 import QuizStudio from "./QuizStudio";
-import AudioClaim from "./AudioClaim";
 
 /* Shared ghost-button style, also reused by the review banner in App. */
 export const ghostBtn = {
@@ -43,9 +42,6 @@ export default function TeacherArea({
   /* 小测老师原来根本看不到（只长在孩子那一屏），也不知道上哪儿给里面的
      声音录音。这一页管这两件事：试做一遍 + 给问句和答案录音。 */
   tabs.push({ k: "quiz", t: "📝 小测" });
-  /* 9/12–11/21 之间从「其他字」录的音只传了文件、没写记录，这一页把它们
-     听一遍认回到字上。认完就没内容了，到时候删掉这个页签。 */
-  if (!isAdmin) tabs.push({ k: "claim", t: "🔊 找回录音" });
   if (isAdmin) {
     tabs.push(
       { k: "classes", t: "🏫 班级" },
@@ -143,9 +139,6 @@ export default function TeacherArea({
           curriculum={curriculum} session={session}
           maxLessonNo={maxLessonNo} pushToast={pushToast}
         />
-      )}
-      {view === "claim" && !isAdmin && (
-        <AudioClaim curriculum={curriculum} session={session} pushToast={pushToast} />
       )}
       {view === "curriculum" && (
         <CurriculumBrowser
