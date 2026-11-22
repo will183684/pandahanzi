@@ -45,11 +45,16 @@ export default function LessonEditor({
          这一步失败不该挡住字表保存，但也别闷着 —— 之前 RLS 拦掉写入，
          界面照样报「已保存」，老师换个班就发现录音没共享过去。 */
       let sharedFailed = false;
+      const missing = [];
       if (curriculum && session && session.role === "teacher" && session.name) {
         const charMap = new Map(curriculum.characters.map((c) => [c.hanzi, c]));
         for (const row of [...rows, ...extras]) {
           const ch = charMap.get(row.hanzi);
-          if (!row.audio_url || !ch) continue;
+          if (!row.audio_url) continue;
+          /* 字库里没有这个字（老师在词句里打了个字表之外的字），录音就没地方
+             挂。以前这里直接 continue，界面照报「已保存 ✅」，录音白录了 ——
+             和课程库那边 4287b07 修的是同一类毛病，不能再闷着。 */
+          if (!ch) { missing.push(row.hanzi); continue; }
           try { await saveSharedAudio(ch.id, session.name, row.audio_url); }
           catch (e) { sharedFailed = true; }
         }
@@ -61,7 +66,11 @@ export default function LessonEditor({
       }
       const fresh = await getClassLessonChars(selectedId);
       setChars(fresh);
-      pushToast(sharedFailed ? "本班已保存 ✅　但录音没能共享给其他班 ⚠️" : "已保存 ✅");
+      pushToast(
+        sharedFailed ? "本班已保存 ✅　但录音没能共享给其他班 ⚠️"
+          : missing.length ? `已保存 ✅　但「${missing.join("")}」不在字库里，这几段录音没能存 ⚠️`
+            : "已保存 ✅"
+      );
       if (onAfterSave) onAfterSave();
     } catch (e) {
       pushToast("字表保存失败 ⚠️");

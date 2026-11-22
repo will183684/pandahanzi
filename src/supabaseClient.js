@@ -204,13 +204,22 @@ export async function getClassLessons(classId) {
 /* 本班所有课的字（不含录音，用于历史列表预览） */
 export async function getClassCharsBrief(classLessonIds) {
   if (!classLessonIds.length) return [];
-  const { data, error } = await supabase
-    .from("class_lesson_chars")
-    .select("class_lesson_id,hanzi,pinyin,emoji,pos")
-    .in("class_lesson_id", classLessonIds)
-    .order("pos");
-  if (error) throw error;
-  return data || [];
+  /* 一节课 10 个字，PostgREST 一次最多给 1000 行 —— 一个班上到第 100 课
+     就会被悄悄截断，后面那些课的历史预览会少字，而且不报错。所以分页拿。 */
+  const PAGE = 1000;
+  const out = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("class_lesson_chars")
+      .select("class_lesson_id,hanzi,pinyin,emoji,pos")
+      .in("class_lesson_id", classLessonIds)
+      .order("class_lesson_id").order("pos")
+      .range(from, from + PAGE - 1);
+    if (error) throw error;
+    out.push(...(data || []));
+    if (!data || data.length < PAGE) break;
+  }
+  return out;
 }
 
 /* 单节课的完整字表。
